@@ -5,7 +5,7 @@ Single-file HTML tool for cross-functional refund analysis (CS, Supply Chain, Lo
 ## Live URL
 
 ```
-https://teepublic.github.io/refund-intelligence-hub/
+https://teepublic.github.io/operations-refund-intelligence-hub/
 ```
 
 Access is restricted (private Pages) to TeePublic org members with read access to this repo. The exact URL also appears on each successful workflow run under the `github-pages` environment, and on Settings → Pages.
