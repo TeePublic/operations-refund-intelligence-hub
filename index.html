@@ -1241,7 +1241,7 @@ function parseCSV(text, sourceIsAUD = false, meta = {}) {
   }
   if (!refunds.length) { toast('No valid rows found. Check column names.', true); return; }
   const siteLabel = metaSite ? ` · ${metaSite}` : '';
-  loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded${siteLabel}`);
+  loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded${siteLabel}`, { publish: true });
 }
 
 function splitLine(line) {
@@ -1488,7 +1488,7 @@ function buildRefundsFromMatrix(rows, headers, mapping, meta) {
     });
   });
   if (!refunds.length) { toast('⚠️ No valid rows after mapping — check the Date column.', true); return; }
-  loadData(refunds, `${refunds.length.toLocaleString()} refunds ingested${meta.sourceName ? ' · ' + meta.sourceName : ''}`);
+  loadData(refunds, `${refunds.length.toLocaleString()} refunds ingested${meta.sourceName ? ' · ' + meta.sourceName : ''}`, { publish: true });
 }
 
 // ════════════════════════════════════════════════════════
@@ -1638,7 +1638,9 @@ async function ingestDriveFileById(id, mimeType, name) {
   } catch (e) { toast('⚠️ Drive ingest failed: ' + e.message, true); }
 }
 
-function loadData(refunds, statusMsg) {
+// opts.publish === true → also append these rows to the shared Sheet (uploads only;
+// never for sample data or rows that were just READ from the Sheet).
+function loadData(refunds, statusMsg, opts = {}) {
   // Remove any existing rows from the same source+site so re-uploading a
   // source refreshes it cleanly rather than duplicating rows
   const newSource = refunds[0]?.source;
@@ -1663,6 +1665,65 @@ function loadData(refunds, statusMsg) {
   updateDots();
   toast(`✓ ${statusMsg}`);
   if (!STATE.usdToAudRate) fetchExchangeRate();
+
+  // Shared persistence: auto-publish uploaded rows to the Sheet so coworkers see them
+  if (opts.publish) appendRefundsToSheet(refunds);
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — SHARED PERSISTENCE: write uploaded rows back to refunds_master
+// (auto-publish on every upload; the Sheet is the single shared source of truth)
+// ════════════════════════════════════════════════════════
+async function appendRefundsToSheet(refunds) {
+  if (!refunds || !refunds.length) return;
+  if (!STATE.settings.sheetId) {
+    toast('ℹ️ No Sheet ID set — data is local only, not shared. Add it in ⚙️ Settings to publish.', true);
+    return;
+  }
+  if (!STATE.googleAccessToken) {
+    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => appendRefundsToSheet(refunds));
+    return;
+  }
+  try {
+    const now = new Date().toISOString();
+    const who = STATE.settings.userEmail || '';
+    const values = refunds.map(r => {
+      const isAUD = r.sourceCurrency === 'AUD';
+      // Persist the native amount + currency so AUD rows round-trip faithfully
+      const amount = isAUD ? (r.nativeAmtAUD ?? '') : (r.amount ?? '');
+      return [
+        r.refund_id || ('rih-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)),
+        r.dateStr || '',
+        r.site || '',
+        r.team || '',
+        r.source || '',
+        r.tag || '',
+        amount,
+        isAUD ? 'AUD' : 'USD',
+        r.agent || '',
+        r.ticketId || '',
+        r.orderId || '',
+        now,
+        who
+      ];
+    });
+    const range = encodeURIComponent('refunds_master!A:M');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${STATE.settings.sheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + STATE.googleAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values })
+    });
+    if (res.status === 401 || res.status === 403) {
+      STATE.googleAccessToken = null;
+      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => appendRefundsToSheet(refunds));
+      return;
+    }
+    if (!res.ok) throw new Error('append failed: ' + res.status);
+    toast(`☁️ Published ${values.length.toLocaleString()} rows to the shared Sheet`);
+  } catch (e) {
+    toast('⚠️ Publish to Sheet failed (data is local only): ' + e.message, true);
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -3395,6 +3456,13 @@ function toast(msg, isError = false) {
 });
 loadSettingsUI();
 updateDots();
+
+// Shared persistence: if a Sheet is configured, auto-load it on open so coworkers
+// see published data without re-uploading. (Reading the Sheet still requires their
+// own Google sign-in; the popup may need a click if the browser blocks it on load.)
+if (STATE.settings.sheetId) {
+  loadFromSheet();
+}
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
