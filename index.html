@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Refund Intelligence Hub v3 — TeePublic + Redbubble</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<!-- SheetJS — client-side .xlsx / .xls parsing (no build step, CDN only) -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- Google API loader — used for the Drive Picker (folder poll ingestion) -->
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
 :root {
   --primary: #A03877;
@@ -299,12 +303,9 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
       <input type="text" id="userEmail" placeholder="you@teepublic.com">
       <div class="form-hint">Recorded as ingested_by on every row you upload.</div>
     </div>
-    <hr class="modal-divider">
-    <div class="form-group">
-      <label>Monthly OKR Target (% Reduction)</label>
-      <input type="number" id="okrTarget" value="5" min="1" max="50" step="0.5" style="width:100px;">
-    </div>
-    
+    <!-- OKR target field removed — targets now live in the okr_targets Sheet tab,
+         editable via the Overview tab's ✏️ Edit OKRs button. -->
+
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="saveSettings()">Save</button>
       <button class="btn btn-ghost" onclick="closeModal('settingsModal')">Cancel</button>
@@ -413,15 +414,40 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
            ondragleave="this.classList.remove('drag-over')"
            ondrop="handleDrop(event)">
         <div class="upload-icon">📂</div>
-        <p><strong>Click to upload</strong> a source CSV, or drag &amp; drop it here</p>
-        <p style="margin-top:6px; font-size:12px; color:var(--text-light);">Pick the source from the modal that opens. Data is normalized to: Date, Site, Team, Source, Reason Tag, Amount.</p>
+        <p><strong>Click to upload</strong> a CSV or Excel file, or drag &amp; drop it here</p>
+        <p style="margin-top:6px; font-size:12px; color:var(--text-light);">Supports .csv, .xlsx, .xls. Headers are auto-mapped (Zendesk Explore / Sigma exports recognized); you can adjust the mapping if needed. Normalized to: Date, Site, Team, Source, Reason Tag, Amount, Currency.</p>
       </div>
-      <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleFileUpload(event)">
+      <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFileUpload(event)">
+
+      <!-- Google Drive ingestion (Mode A: folder picker · Mode B: paste link) -->
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-light); margin-bottom:10px;">Or ingest from Google Drive</div>
+        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="connectDriveFolder()">📁 Connect Drive Folder</button>
+          <div style="flex:1; min-width:240px;">
+            <input type="text" id="driveLinkInput" placeholder="Paste a Google Drive file or Sheet URL" style="width:100%;"
+                   onkeydown="if(event.key==='Enter') ingestDriveLink()">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="ingestDriveLink()">⬇️ Ingest link</button>
+        </div>
+        <p style="margin-top:6px; font-size:11px; color:var(--text-light);">Folder picker lists CSV/Excel/Sheets to choose from. Paste-a-link works for a Google Sheet, a Google Doc (table data), or a Drive CSV/XLSX.</p>
+        <!-- PHASE 2: PDF ingestion (out of scope for launch) -->
+      </div>
+
       <div style="text-align:center; margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" onclick="loadSampleData()">📝 Load Sample Data (Demo Mode)</button>
         <button class="btn btn-outline btn-sm" onclick="loadFromSheet()">☁️ Load from Sheet</button>
       </div>
     </div>
+  </div>
+
+  <!-- OKR Progress Banner (Item 5) — primary visual; one bar per okr_targets row -->
+  <div class="card" id="okrBanner" style="margin-bottom:18px; display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">🎯 OKR Progress</div>
+      <button class="btn btn-outline btn-sm" id="editOkrBtn" style="display:none;" onclick="openOkrEditModal()">✏️ Edit OKRs</button>
+    </div>
+    <div id="okrBannerBody"></div>
   </div>
 
   <div class="kpi-grid">
@@ -549,7 +575,7 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
 
 <!-- ═══════════════════ AI ANALYSIS TAB ═══════════════════ -->
 <div class="tab-panel" id="tab-ai-analysis">
-  <div class="card" style="margin-bottom:18px;">
+  <div class="card" id="aiGeminiCard" style="margin-bottom:18px;">
     <div class="card-title">🤖 Gemini AI Analysis</div>
     <div class="ai-panel">
       <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">Quick prompts — click to run instantly:</p>
@@ -573,6 +599,18 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
       <div class="ai-response" id="aiResponse">Configure your Gemini API key in ⚙️ Settings, then ask a question. Your current refund data will be automatically included as context.</div>
     </div>
   </div>
+
+  <!-- No-AI fallback: pre-computed insight cards (Item 4). Primary view when no Gemini key; quick context when key present. -->
+  <div id="aiCardsSection">
+    <div id="aiCardsHeader" style="display:flex; align-items:baseline; gap:10px; margin-bottom:12px;">
+      <div style="font-size:16px; font-weight:800; color:var(--text);">📇 Computed Insights</div>
+      <div id="aiCardsSubtitle" style="font-size:12px; color:var(--text-secondary);">No API key needed — these are calculated directly from your data.</div>
+    </div>
+    <div class="grid-3" id="aiInsightCards">
+      <div class="empty-state span-2"><div class="empty-icon">📇</div><p>Load data to see computed insight cards.</p></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title">Data Context Sent to AI</div>
     <pre id="aiContextPreview" style="font-size:12px; color:var(--text-secondary); font-family:'Consolas','Courier New',monospace; background:var(--bg); padding:14px; border-radius:8px; max-height:200px; overflow-y:auto; white-space:pre-wrap;">No data loaded yet.</pre>
@@ -899,17 +937,62 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
   </div>
 </div>
 
+<!-- Column-mapper modal (Item 3) — shown when auto-detection can't confidently map headers -->
+<div class="modal-overlay" id="columnMapperModal">
+  <div class="modal">
+    <div class="modal-title">🧭 Map your columns</div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+      We matched what we could from the file headers. Confirm or adjust how each column maps to the hub's schema.
+      <strong>Date</strong> is required; everything else is optional.
+    </p>
+    <div id="columnMapperRows"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="applyColumnMapping()">Import ↑</button>
+      <button class="btn btn-ghost" onclick="closeModal('columnMapperModal'); STATE._pendingRows=null; STATE._pendingHeaders=null; STATE._pendingMeta=null;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- OKR edit modal (Item 5) — edit target values inline, writes back to okr_targets tab -->
+<div class="modal-overlay" id="okrEditModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit OKR Targets</div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+      Adjust target values below. Saving writes back to the <strong>okr_targets</strong> tab in the Sheet — no redeploy needed.
+    </p>
+    <div id="okrEditRows"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveOkrTargets()">Save targets</button>
+      <button class="btn btn-ghost" onclick="closeModal('okrEditModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drive file-list modal (Item 3, Mode A) — files found in the selected Drive folder -->
+<div class="modal-overlay" id="driveFilesModal">
+  <div class="modal">
+    <div class="modal-title">📁 Files in folder</div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Select a CSV, Excel, or Google Sheet to ingest.</p>
+    <div id="driveFilesList" style="max-height:340px;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('driveFilesModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 </main>
 
 <script>
 // ════════════════════════════════════════════════════════
 // SITE CONFIG — non-sensitive defaults, pre-populated for all users
-// ⚠️ Do NOT put API keys or tokens here — this file is shared
+// ⚠️ Do NOT put API keys, tokens, password hashes, or the OAuth Client ID here.
+// settingsPasswordHash and googleClientId are injected at BUILD TIME by the
+// GitHub Actions deploy workflow (from the SETTINGS_PASSWORD and GOOGLE_CLIENT_ID
+// repo Secrets). The repo source only ever holds the __…_PLACEHOLDER__ tokens.
 // ════════════════════════════════════════════════════════
 const SITE_CONFIG = {
   sheetId:             '',          // Level 2 — paste your Master Sheet ID
-  googleClientId:      '',          // paste your OAuth Client ID
-  okrTarget:           5,           // MoM refund reduction OKR (%)
+  googleClientId:      '__GOOGLE_CLIENT_ID_PLACEHOLDER__', // injected at build time (GOOGLE_CLIENT_ID secret)
   userEmail:           '',          // your work email
   sopDocIdTpo:         '',          // TPO SOP Google Doc ID
   sopDocIdRbo:         '',          // RBO SOP Google Doc ID
@@ -917,7 +1000,7 @@ const SITE_CONFIG = {
   zdSubdomainRbo:      'redbubble', // RBO Zendesk subdomain
   zdEmail:             '',          // TPO Zendesk agent email
   zdEmailRbo:          '',          // RBO Zendesk agent email
-  settingsPasswordHash: '',         // SHA-256 hash of your settings password — generate via console (see build checklist)
+  settingsPasswordHash: '__SETTINGS_HASH_PLACEHOLDER__', // injected at build time (SHA-256 of SETTINGS_PASSWORD secret)
 };
 
 // ════════════════════════════════════════════════════════
@@ -941,10 +1024,18 @@ const STATE = {
   googleAccessToken: null,
   aiInsightCache: null,
   activeSopSite: 'TPO',        // which SOP is being viewed/edited in the SOP Reference tab
-  currency: 'USD',             // 'USD' | 'AUD'
+  currency: 'USD',             // 'USD' | 'AUD' — formalized activeCurrency (single source of truth)
   usdToAudRate: null,          // locked at ingestion time, null until first data load
   makegoodData: [],            // RBO makegood rows (vouchers + reprints), separate from refunds
-  _pendingCSVText: null        // holds raw CSV text while upload-type modal is open
+  // ─── V3 launch additions (Google Sheet backend + Drive ingestion) ───
+  okrTargets: [],              // loaded from okr_targets Sheet tab — drives the Overview OKR banner
+  settingsUnlocked: false,     // true once the settings password is verified (gates OKR editing)
+  driveConnected: false,       // true after Drive Picker auth
+  driveFolderId: null,         // ID of the connected Drive folder
+  _pendingCSVText: null,       // holds raw CSV text while upload-type modal is open
+  _pendingRows: null,          // parsed rows awaiting the column-mapper modal
+  _pendingHeaders: null,       // detected headers awaiting the column-mapper modal
+  _pendingMeta: null           // source metadata captured before column mapping
 };
 
 // ════════════════════════════════════════════════════════
@@ -962,14 +1053,21 @@ function set(id, val) { const el = document.getElementById(id); if (el) el.textC
 // ════════════════════════════════════════════════════════
 // SETTINGS
 // ════════════════════════════════════════════════════════
+// A build-time placeholder (e.g. __SETTINGS_HASH_PLACEHOLDER__) means the secret
+// was never injected — treat it as "not configured" so local/preview builds work.
+const isPlaceholder = v => typeof v === 'string' && /^__.*__$/.test(v);
+
 function openSettings() {
-  if (SITE_CONFIG.settingsPasswordHash) {
+  const hash = SITE_CONFIG.settingsPasswordHash;
+  if (hash && !isPlaceholder(hash)) {
     // Reset prompt state each time
     document.getElementById('settingsPwInput').value = '';
     document.getElementById('settingsPwError').style.display = 'none';
     openModal('settingsPasswordModal');
   } else {
-    // No password configured — open freely
+    // No password configured (or placeholder not injected) — open freely
+    STATE.settingsUnlocked = true;
+    renderOverview();   // reveal the Edit OKRs control if data is loaded
     openModal('settingsModal');
   }
 }
@@ -984,6 +1082,8 @@ async function checkSettingsPassword(entered) {
     closeModal('settingsPasswordModal');
     document.getElementById('settingsPwInput').value = '';
     document.getElementById('settingsPwError').style.display = 'none';
+    STATE.settingsUnlocked = true;
+    renderOverview();   // reveal the Edit OKRs control if data is loaded
     openModal('settingsModal');
   } else {
     document.getElementById('settingsPwError').style.display = 'block';
@@ -996,12 +1096,12 @@ function saveSettings() {
   const s = {
     zdSubdomain: v('zdSubdomain'), zdEmail: v('zdEmail'), zdToken: v('zdToken'),
     zdSubdomainRbo: v('zdSubdomainRbo'), zdEmailRbo: v('zdEmailRbo'), zdTokenRbo: v('zdTokenRbo'),
-    geminiKey: v('geminiKey'), googleClientId: v('googleClientId'),
+    geminiKey: v('geminiKey'), googleClientId: v('googleClientId') || STATE.settings.googleClientId,
     sopDocIdTpo: v('sopDocIdTpo'),
     sopDocIdRbo: v('sopDocIdRbo'),
     sheetId: v('sheetId'),
-    userEmail: v('userEmail'),
-    okrTarget: parseFloat(v('okrTarget')) || 5
+    userEmail: v('userEmail')
+    // okrTarget removed — OKR targets now live in the okr_targets Sheet tab (editable via Overview ✏️ Edit OKRs)
   };
   STATE.settings = s;
   sessionStorage.setItem('rih_settings', JSON.stringify(s));
@@ -1017,7 +1117,7 @@ function saveSettings() {
 
 function loadSettingsUI() {
   const s = STATE.settings;
-  const m = (id, val) => { if (val) document.getElementById(id).value = val; };
+  const m = (id, val) => { if (val && !isPlaceholder(val)) document.getElementById(id).value = val; };
   m('zdSubdomain', s.zdSubdomain); m('zdEmail', s.zdEmail); m('zdToken', s.zdToken);
   m('zdSubdomainRbo', s.zdSubdomainRbo); m('zdEmailRbo', s.zdEmailRbo); m('zdTokenRbo', s.zdTokenRbo);
   m('geminiKey', s.geminiKey); m('googleClientId', s.googleClientId);
@@ -1026,7 +1126,6 @@ function loadSettingsUI() {
   const activeId = STATE.activeSopSite === 'RBO' ? s.sopDocIdRbo : s.sopDocIdTpo;
   m('sopDocIdInput', activeId);
   m('sheetId', s.sheetId); m('userEmail', s.userEmail);
-  if (s.okrTarget) document.getElementById('okrTarget').value = s.okrTarget;
 }
 
 function updateDots() {
@@ -1048,7 +1147,7 @@ function switchTab(name) {
   const map = {
     'reason-tags': renderReasonTags,
     'agent-view': renderAgentView,
-    'ai-analysis': updateAiContext,
+    'ai-analysis': renderAiAnalysis,
     'deflection-tests': renderTests,
     'sources': renderSources,
     'history': renderHistory,
@@ -1060,12 +1159,20 @@ function switchTab(name) {
 // ════════════════════════════════════════════════════════
 // CSV PARSING
 // ════════════════════════════════════════════════════════
-function handleFileUpload(e) { const f = e.target.files[0]; if (f) readCSV(f); }
+function handleFileUpload(e) { const f = e.target.files[0]; if (f) readUploadFile(f); }
 function handleDrop(e) {
   e.preventDefault();
   document.getElementById('uploadZone').classList.remove('drag-over');
-  const f = e.dataTransfer.files[0]; if (f) readCSV(f);
+  const f = e.dataTransfer.files[0]; if (f) readUploadFile(f);
 }
+
+// Route a dropped/selected file by extension: Excel → SheetJS, CSV → existing flow
+function readUploadFile(file) {
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) { readExcel(file); return; }
+  readCSV(file);
+}
+
 function readCSV(file) {
   const reader = new FileReader();
   reader.onload = ev => {
@@ -1076,6 +1183,24 @@ function readCSV(file) {
     openModal('uploadTypeModal');
   };
   reader.readAsText(file);
+}
+
+// Excel ingestion via SheetJS — parse first sheet to a matrix, then run the column mapper
+function readExcel(file) {
+  if (typeof XLSX === 'undefined') { toast('⚠️ Excel parser not loaded — check your connection.', true); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      if (!matrix.length) { toast('⚠️ That spreadsheet looks empty.', true); return; }
+      ingestMatrix(matrix, { sourceName: file.name.replace(/\.(xlsx|xls)$/i, '') });
+    } catch (e) {
+      toast('⚠️ Could not parse Excel file: ' + e.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function parseCSV(text, sourceIsAUD = false, meta = {}) {
@@ -1228,6 +1353,289 @@ function formatCurrencyFromAUD(amtAUD) {
   }
   const rate = STATE.usdToAudRate || 1.55;   // fallback matches fetchExchangeRate fallback
   return '$' + (n / rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — UNIVERSAL INGESTION + COLUMN MAPPER (Item 3)
+// Any tabular source (CSV text, Excel matrix, Drive export) becomes a
+// header row + data rows, then runs through the same auto-map / fallback path.
+// ════════════════════════════════════════════════════════
+const INGEST_FIELDS = [
+  { key: 'date',     label: 'Date', required: true },
+  { key: 'amount',   label: 'Amount' },
+  { key: 'tag',      label: 'Reason tag' },
+  { key: 'agent',    label: 'Agent' },
+  { key: 'site',     label: 'Site (Brand)' },
+  { key: 'team',     label: 'Team' },
+  { key: 'source',   label: 'Source' },
+  { key: 'currency', label: 'Currency' },
+  { key: 'ticketId', label: 'Ticket ID' },
+  { key: 'orderId',  label: 'Order ID' }
+];
+// Known Zendesk Explore / Sigma export headers pre-mapped as aliases (case-insensitive)
+const INGEST_ALIASES = {
+  date:     ['created at', 'date', 'created', 'voucher date'],
+  amount:   ['refund amount', 'amount', 'refund', 'total'],
+  tag:      ['tags', 'reason', 'tag', 'zendesk reason'],
+  agent:    ['assignee name', 'assignee', 'agent name', 'agent'],
+  site:     ['brand', 'site'],
+  team:     ['team'],
+  source:   ['source'],
+  currency: ['currency', 'curr'],
+  ticketId: ['ticket id', 'zendesk ticket', 'ticket_id', 'ticket'],
+  orderId:  ['order id', 'purchase order', 'order_id', 'order']
+};
+
+// Brand → site normalization (TeePublic → TPO, Redbubble → RBO)
+function normalizeSite(val) {
+  if (!val) return '';
+  const s = val.trim().toLowerCase();
+  if (s.includes('teepublic') || s === 'tpo') return 'TPO';
+  if (s.includes('redbubble') || s === 'rbo') return 'RBO';
+  return val.trim().toUpperCase();
+}
+
+// CSV text → matrix [[headers],[row]...]
+function csvTextToMatrix(text) {
+  const lines = text.replace(/\r/g, '').trim().split('\n');
+  return lines.map(l => splitLine(l).map(c => c.replace(/^"|"$/g, '').trim()));
+}
+// Plain-text (Google Doc export) → matrix; tables export as tab- or comma-delimited lines
+function textToMatrix(text) {
+  const lines = text.replace(/\r/g, '').trim().split('\n').filter(l => l.trim());
+  if (!lines.length) return [];
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  return lines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, '').trim()));
+}
+
+// Auto-detect header → field mapping, never assigning the same column twice
+function autoMapColumns(headers) {
+  const low = headers.map(h => String(h).toLowerCase().trim());
+  const used = new Set();
+  const mapping = {};
+  INGEST_FIELDS.forEach(f => {
+    const aliases = INGEST_ALIASES[f.key] || [f.key];
+    let found = -1;
+    for (const a of aliases) { const i = low.findIndex((h, idx) => !used.has(idx) && h === a); if (i >= 0) { found = i; break; } }
+    if (found < 0) for (const a of aliases) { const i = low.findIndex((h, idx) => !used.has(idx) && h.includes(a)); if (i >= 0) { found = i; break; } }
+    if (found >= 0) used.add(found);
+    mapping[f.key] = found;
+  });
+  return mapping;
+}
+
+// Entry point for every non-makegood tabular source
+function ingestMatrix(matrix, meta = {}) {
+  const headers = (matrix[0] || []).map(h => String(h).trim());
+  const rows = matrix.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+  if (!headers.length || !rows.length) { toast('⚠️ No data rows found in that file.', true); return; }
+  const mapping = autoMapColumns(headers);
+  STATE._pendingHeaders = headers;
+  STATE._pendingRows = rows;
+  STATE._pendingMeta = meta;
+  if (mapping.date >= 0) {
+    // Confident auto-map — import directly
+    buildRefundsFromMatrix(rows, headers, mapping, meta);
+    STATE._pendingHeaders = STATE._pendingRows = STATE._pendingMeta = null;
+  } else {
+    // Couldn't find a date column — fall back to the manual mapper modal
+    openColumnMapper(headers, mapping);
+  }
+}
+
+function openColumnMapper(headers, mapping) {
+  const wrap = document.getElementById('columnMapperRows');
+  const opts = sel => '<option value="-1">— none —</option>' +
+    headers.map((h, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${escapeHtml(h)}</option>`).join('');
+  wrap.innerHTML = INGEST_FIELDS.map(f => `
+    <div class="form-group">
+      <label>${f.label}${f.required ? ' <span style="color:var(--danger)">*</span>' : ''}</label>
+      <select id="map_${f.key}" style="width:100%;">${opts(mapping[f.key])}</select>
+    </div>`).join('');
+  openModal('columnMapperModal');
+}
+
+function applyColumnMapping() {
+  const mapping = {};
+  INGEST_FIELDS.forEach(f => { mapping[f.key] = parseInt(document.getElementById('map_' + f.key).value); });
+  if (!(mapping.date >= 0)) { toast('⚠️ Date is required — map it to a column.', true); return; }
+  closeModal('columnMapperModal');
+  buildRefundsFromMatrix(STATE._pendingRows || [], STATE._pendingHeaders || [], mapping, STATE._pendingMeta || {});
+  STATE._pendingHeaders = STATE._pendingRows = STATE._pendingMeta = null;
+}
+
+function buildRefundsFromMatrix(rows, headers, mapping, meta) {
+  const get = (row, key) => { const i = mapping[key]; return i >= 0 && i < row.length ? String(row[i]).trim() : ''; };
+  const refunds = [];
+  rows.forEach(row => {
+    const ds = get(row, 'date'); if (!ds) return;
+    const d = new Date(ds); if (isNaN(d)) return;
+    const isAUD = (get(row, 'currency') || meta.currency || 'USD').toUpperCase() === 'AUD';
+    const amt = parseFloat(get(row, 'amount').replace(/[$,]/g, '')) || 0;
+    refunds.push({
+      date: d, dateStr: ds.substring(0, 10),
+      agent: get(row, 'agent') || 'Unknown',
+      tag: get(row, 'tag') || 'Untagged',
+      amount: isAUD ? 0 : amt,
+      nativeAmtAUD: isAUD ? amt : undefined,
+      sourceCurrency: isAUD ? 'AUD' : 'USD',
+      ticketId: get(row, 'ticketId'),
+      orderId: get(row, 'orderId'),
+      site: normalizeSite(get(row, 'site')) || meta.site || 'RBO',
+      team: get(row, 'team') || meta.team || 'CS',
+      source: meta.sourceName || get(row, 'source') || 'Drive import',
+      confLevel: meta.confLevel || 2
+    });
+  });
+  if (!refunds.length) { toast('⚠️ No valid rows after mapping — check the Date column.', true); return; }
+  loadData(refunds, `${refunds.length.toLocaleString()} refunds ingested${meta.sourceName ? ' · ' + meta.sourceName : ''}`);
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — GOOGLE DRIVE INGESTION (Item 3)
+// Mode A: folder picker → file list. Mode B: paste a Drive/Sheet/Doc link.
+// ════════════════════════════════════════════════════════
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+
+// ── Mode A: Drive Picker (folder poll) ──
+function connectDriveFolder() {
+  if (!STATE.googleAccessToken) {
+    requestGoogleAuth([DRIVE_SCOPE], () => connectDriveFolder());
+    return;
+  }
+  if (typeof gapi === 'undefined') { toast('⚠️ Google API not loaded yet — try again in a moment.', true); return; }
+  gapi.load('picker', () => createDrivePicker());
+}
+
+function createDrivePicker() {
+  if (typeof google === 'undefined' || !google.picker) { toast('⚠️ Drive Picker unavailable.', true); return; }
+  const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+    .setSelectFolderEnabled(true)
+    .setMimeTypes('application/vnd.google-apps.folder');
+  new google.picker.PickerBuilder()
+    .addView(view)
+    .setOAuthToken(STATE.googleAccessToken)
+    .setCallback(drivePickerCallback)
+    .build()
+    .setVisible(true);
+}
+
+function drivePickerCallback(data) {
+  if (data.action !== google.picker.Action.PICKED) return;
+  const folder = data.docs && data.docs[0];
+  if (!folder) return;
+  STATE.driveFolderId = folder.id;
+  STATE.driveConnected = true;
+  listDriveFolder(folder.id);
+}
+
+const DRIVE_INGESTIBLE = [
+  'text/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.google-apps.spreadsheet'
+];
+
+async function listDriveFolder(folderId) {
+  try {
+    const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType)&pageSize=200`;
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + STATE.googleAccessToken } });
+    if (!res.ok) throw new Error('Drive list failed: ' + res.status);
+    const data = await res.json();
+    const files = (data.files || []).filter(f =>
+      DRIVE_INGESTIBLE.includes(f.mimeType) || /\.(csv|xlsx|xls)$/i.test(f.name || ''));
+    if (!files.length) { toast('No CSV / Excel / Sheet files in that folder.', true); return; }
+    renderDriveFilesList(files);
+    openModal('driveFilesModal');
+  } catch (e) { toast('⚠️ ' + e.message, true); }
+}
+
+function renderDriveFilesList(files) {
+  const icon = m => m === 'application/vnd.google-apps.spreadsheet' ? '📊'
+    : /\.(xlsx|xls)$/i.test(m) || m.includes('excel') || m.includes('spreadsheetml') ? '📈' : '📄';
+  document.getElementById('driveFilesList').innerHTML = files.map(f => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);">
+      <span style="font-size:13px;">${icon(f.mimeType)} ${escapeHtml(f.name)}</span>
+      <button class="btn btn-outline btn-sm" onclick="ingestDriveFileById('${f.id}','${f.mimeType}',${JSON.stringify(f.name)})">Ingest</button>
+    </div>`).join('');
+}
+
+// ── Mode B: paste a Drive / Sheet / Doc link ──
+function extractDriveId(url) {
+  const patterns = [
+    /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/,
+    /\/document\/d\/([a-zA-Z0-9_-]+)/,
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /[?&]id=([a-zA-Z0-9_-]+)/,
+    /\/d\/([a-zA-Z0-9_-]+)/
+  ];
+  for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
+  return null;
+}
+
+async function ingestDriveLink() {
+  const url = v('driveLinkInput');
+  if (!url) { toast('⚠️ Paste a Drive URL first.', true); return; }
+  const id = extractDriveId(url);
+  if (!id) { toast('⚠️ Could not find a file ID in that URL.', true); return; }
+  if (!STATE.googleAccessToken) { requestGoogleAuth([DRIVE_SCOPE], () => ingestDriveLink()); return; }
+  try {
+    if (/\/spreadsheets\//.test(url)) {
+      const text = await driveExport(id, 'text/csv');
+      ingestMatrix(csvTextToMatrix(text), { sourceName: 'Drive Sheet' });
+    } else if (/\/document\//.test(url)) {
+      const text = await driveExport(id, 'text/plain');
+      ingestMatrix(textToMatrix(text), { sourceName: 'Drive Doc' });
+    } else {
+      await ingestDriveFileById(id, null, 'Drive file');
+    }
+    document.getElementById('driveLinkInput').value = '';
+  } catch (e) { toast('⚠️ ' + e.message, true); }
+}
+
+// ── Shared Drive fetch helpers (all authenticated with the OAuth token) ──
+const driveHeaders = () => ({ Authorization: 'Bearer ' + STATE.googleAccessToken });
+async function driveMeta(id) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType,name`, { headers: driveHeaders() });
+  if (!res.ok) throw new Error('Drive metadata failed: ' + res.status);
+  return res.json();
+}
+async function driveExport(id, mimeType) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=${encodeURIComponent(mimeType)}`, { headers: driveHeaders() });
+  if (!res.ok) throw new Error('Drive export failed: ' + res.status);
+  return res.text();
+}
+async function driveDownloadBuffer(id) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { headers: driveHeaders() });
+  if (!res.ok) throw new Error('Drive download failed: ' + res.status);
+  return res.arrayBuffer();
+}
+async function driveDownloadText(id) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { headers: driveHeaders() });
+  if (!res.ok) throw new Error('Drive download failed: ' + res.status);
+  return res.text();
+}
+
+async function ingestDriveFileById(id, mimeType, name) {
+  closeModal('driveFilesModal');
+  if (!STATE.googleAccessToken) { requestGoogleAuth([DRIVE_SCOPE], () => ingestDriveFileById(id, mimeType, name)); return; }
+  try {
+    if (!mimeType) { const meta = await driveMeta(id); mimeType = meta.mimeType; name = name || meta.name; }
+    const base = (name || 'Drive file').replace(/\.(csv|xlsx|xls)$/i, '');
+    if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+      ingestMatrix(csvTextToMatrix(await driveExport(id, 'text/csv')), { sourceName: base });
+    } else if (mimeType === 'application/vnd.google-apps.document') {
+      ingestMatrix(textToMatrix(await driveExport(id, 'text/plain')), { sourceName: base });
+    } else if (/spreadsheetml|excel/.test(mimeType) || /\.(xlsx|xls)$/i.test(name || '')) {
+      if (typeof XLSX === 'undefined') { toast('⚠️ Excel parser not loaded.', true); return; }
+      const wb = XLSX.read(new Uint8Array(await driveDownloadBuffer(id)), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      ingestMatrix(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }), { sourceName: base });
+    } else {
+      ingestMatrix(csvTextToMatrix(await driveDownloadText(id)), { sourceName: base });
+    }
+  } catch (e) { toast('⚠️ Drive ingest failed: ' + e.message, true); }
 }
 
 function loadData(refunds, statusMsg) {
@@ -1499,12 +1907,144 @@ function setSiteFilter(site) {
 }
 
 // ════════════════════════════════════════════════════════
+// V3 — OKR PROGRESS BANNER + EDITOR (Item 5)
+// ════════════════════════════════════════════════════════
+
+// Best-effort current value for an OKR, inferred from its metric/label keywords.
+// Returns { value, display } or null when we can't compute it generically.
+function computeOkrCurrent(okr) {
+  const key = `${okr.metric} ${okr.label}`.toLowerCase();
+  const curr = curMonthFiltered();
+  if (/amount|value|\$|revenue|cost/.test(key) || okr.unit === '$') {
+    const v = sumAmount(curr);
+    return { value: v, display: formatCurrency(v) };
+  }
+  if (/rate|refund|volume|count|ticket|deflect/.test(key) || okr.unit === 'count' || okr.unit === '%') {
+    const v = curr.length;
+    return { value: v, display: v.toLocaleString() + (okr.unit === '%' ? '' : ' refunds') };
+  }
+  return null;
+}
+
+function renderOkrBanner() {
+  const banner = document.getElementById('okrBanner');
+  const body = document.getElementById('okrBannerBody');
+  const editBtn = document.getElementById('editOkrBtn');
+  if (!banner || !body) return;
+
+  // Only settings-unlocked users can edit targets
+  editBtn.style.display = STATE.settingsUnlocked && STATE.okrTargets.length ? 'inline-flex' : 'none';
+
+  if (!STATE.okrTargets.length) {
+    banner.style.display = 'block';
+    body.innerHTML = `<div style="font-size:13px; color:var(--text-secondary);">
+      No OKR targets loaded yet. Add an <strong>okr_targets</strong> tab to your Sheet and use <strong>☁️ Load from Sheet</strong> to populate this banner.
+    </div>`;
+    return;
+  }
+
+  banner.style.display = 'block';
+  const cols = Math.min(STATE.okrTargets.length, 3);
+  body.innerHTML = `<div style="display:grid; grid-template-columns:repeat(${cols},1fr); gap:18px;">` +
+    STATE.okrTargets.map(okr => {
+      const cur = computeOkrCurrent(okr);
+      const lowerBetter = okr.direction !== 'higher_is_better';
+      let onTrack = null, pct = 0, deltaStr = '—', curDisplay = '—';
+      if (cur) {
+        curDisplay = cur.display;
+        onTrack = lowerBetter ? cur.value <= okr.target : cur.value >= okr.target;
+        pct = okr.target > 0
+          ? (lowerBetter ? (okr.target / Math.max(cur.value, 0.0001)) : (cur.value / okr.target)) * 100
+          : 0;
+        pct = Math.max(3, Math.min(100, pct));
+        const delta = cur.value - okr.target;
+        deltaStr = (delta >= 0 ? '▲ +' : '▼ ') + Math.abs(delta).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' vs target';
+      }
+      const barClass = onTrack === null ? '' : onTrack ? 'on-track' : 'off-track';
+      const statusTxt = onTrack === null ? 'No current value' : onTrack ? '✓ On track' : '✗ Off track';
+      const statusColor = onTrack === null ? 'var(--text-light)' : onTrack ? 'var(--success)' : 'var(--danger)';
+      return `<div>
+        <div style="font-size:12px; font-weight:700; color:var(--text); margin-bottom:2px;">${escapeHtml(okr.label || okr.metric)}</div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
+          <span style="font-size:24px; font-weight:800; color:var(--text); font-feature-settings:'tnum';">${escapeHtml(curDisplay)}</span>
+          <span style="font-size:12px; color:var(--text-secondary);">Target: ${escapeHtml(String(okr.target))}${escapeHtml(okr.unit || '')}</span>
+        </div>
+        <div class="okr-bar-wrap"><div class="okr-bar ${barClass}" style="width:${pct}%"></div></div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:4px;">
+          <span style="color:${statusColor}; font-weight:600;">${statusTxt}</span>
+          <span style="color:var(--text-light);">${escapeHtml(deltaStr)}</span>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+function openOkrEditModal() {
+  const wrap = document.getElementById('okrEditRows');
+  if (!STATE.okrTargets.length) {
+    wrap.innerHTML = '<p style="font-size:13px; color:var(--text-secondary);">No OKR targets to edit. Load them from the Sheet first.</p>';
+    openModal('okrEditModal');
+    return;
+  }
+  wrap.innerHTML = STATE.okrTargets.map((okr, i) => `
+    <div class="form-group">
+      <label>${escapeHtml(okr.label || okr.metric)} <span style="text-transform:none; color:var(--text-light); font-weight:600;">(${escapeHtml(okr.direction.replace(/_/g, ' '))})</span></label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="number" id="okrEdit_${i}" value="${escapeHtml(String(okr.target))}" step="0.1" style="flex:1;">
+        <span style="font-size:12px; color:var(--text-secondary); min-width:40px;">${escapeHtml(okr.unit || '')}</span>
+      </div>
+    </div>`).join('');
+  openModal('okrEditModal');
+}
+
+async function saveOkrTargets() {
+  const updated = STATE.okrTargets.map((okr, i) => {
+    const el = document.getElementById('okrEdit_' + i);
+    const t = el ? parseFloat(el.value) : NaN;
+    return { ...okr, target: isNaN(t) ? okr.target : t, updated_at: new Date().toISOString() };
+  });
+  STATE.okrTargets = updated;
+  closeModal('okrEditModal');
+  renderOverview();
+  toast('OKR targets updated ✓');
+  if (STATE.settings.sheetId) writeOkrTargetsToSheet(updated);
+  else toast('ℹ️ No Sheet ID set — saved for this session only.', true);
+}
+
+async function writeOkrTargetsToSheet(targets) {
+  if (!STATE.googleAccessToken) {
+    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => writeOkrTargetsToSheet(targets));
+    return;
+  }
+  try {
+    const values = targets.map(o => [o.metric, o.target, o.unit, o.direction, o.label, o.updated_at]);
+    const range = `okr_targets!A2:F${1 + values.length}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${STATE.settings.sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + STATE.googleAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values })
+    });
+    if (res.status === 401 || res.status === 403) {
+      STATE.googleAccessToken = null;
+      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => writeOkrTargetsToSheet(targets));
+      return;
+    }
+    if (!res.ok) throw new Error('Write failed: ' + res.status);
+    toast('✓ OKR targets saved to Sheet');
+  } catch (e) {
+    toast('⚠️ Sheet write failed (changes kept for this session): ' + e.message, true);
+  }
+}
+
+// ════════════════════════════════════════════════════════
 // OVERVIEW
 // ════════════════════════════════════════════════════════
 function renderOverview() {
   const all = applySiteFilter(STATE.refunds);
   if (!all.length) return;
   const okrT = STATE.settings.okrTarget || 5;
+
+  renderOkrBanner();   // OKR-first: primary visual at the top of the Overview
 
   // Month reference points
   const today = new Date();
@@ -1835,6 +2375,200 @@ Use plain HTML formatting. Wrap source names in <span style="background:white;bo
 
 function updateAiContext() {
   document.getElementById('aiContextPreview').textContent = buildContext();
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — AI ANALYSIS TAB: no-AI fallback insight cards (Item 4)
+// With a Gemini key: prompt UI on top, cards below as "quick context".
+// Without a key: cards become the primary view, prompt UI is hidden.
+// ════════════════════════════════════════════════════════
+function renderAiAnalysis() {
+  updateAiContext();
+  const hasKey = !!STATE.settings.geminiKey;
+  const geminiCard = document.getElementById('aiGeminiCard');
+  const subtitle = document.getElementById('aiCardsSubtitle');
+  if (geminiCard) geminiCard.style.display = hasKey ? 'block' : 'none';
+  if (subtitle) subtitle.textContent = hasKey
+    ? 'Quick context — calculated directly from your data (no extra API calls).'
+    : 'No API key needed — these are calculated directly from your data. Add a Gemini key in ⚙️ Settings for free-form Q&A.';
+  renderInsightCards();
+}
+
+// Compute every card's data from the currently-filtered dataset
+function computeInsightCards() {
+  const all = applySiteFilter(STATE.refunds);
+  const cards = [];
+  const today = new Date();
+
+  // Last 30 days vs prior 30 days windows
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 30);
+  const d60 = new Date(today); d60.setDate(d60.getDate() - 60);
+  const last30 = all.filter(r => r.date >= d30 && r.date <= today);
+  const prev30 = all.filter(r => r.date >= d60 && r.date < d30);
+
+  // ── 1. OKR Status ──
+  {
+    const refundRate = last30.length;            // refunds in last 30d (count proxy)
+    const prior = prev30.length;
+    const trendPct = prior ? ((refundRate - prior) / prior * 100) : 0;
+    // Find a refund-volume / refund-rate OKR if one is configured in the Sheet
+    const okr = STATE.okrTargets.find(o => /refund/i.test(o.metric) || /refund/i.test(o.label)) || STATE.okrTargets[0];
+    let lines = [];
+    if (okr) {
+      const onTrack = okr.direction === 'higher_is_better' ? refundRate >= okr.target : refundRate <= okr.target;
+      lines.push(`${okr.label || okr.metric}: target ${okr.target}${okr.unit || ''} (${okr.direction.replace(/_/g, ' ')})`);
+      lines.push(`Last 30d: ${refundRate} refunds — ${onTrack ? '✓ on track' : '✗ off track'}`);
+    } else {
+      lines.push(`Last 30d: ${refundRate} refunds (no OKR target loaded)`);
+    }
+    lines.push(`Trend: ${trendPct >= 0 ? '▲ +' : '▼ '}${Math.abs(trendPct).toFixed(1)}% vs prior 30d`);
+    cards.push({ title: '🎯 OKR Status', good: trendPct <= 0, lines });
+  }
+
+  // ── 2. Top 3 Reason Tags (by volume and amount) ──
+  {
+    const byCount = byTag(last30).slice(0, 3);
+    const byAmt = byTagAmt(last30).slice(0, 3);
+    const totalCount = last30.length || 1;
+    const totalAmt = sumAmount(last30) || 1;
+    const lines = [];
+    lines.push('By volume:');
+    byCount.forEach(([t, c]) => lines.push(`  • ${t}: ${c} (${(c / totalCount * 100).toFixed(1)}%)`));
+    lines.push('By value:');
+    byAmt.forEach(([t, d]) => lines.push(`  • ${t}: ${formatCurrency(d.amount)} (${(d.amount / totalAmt * 100).toFixed(1)}%)`));
+    cards.push({ title: '🏷 Top 3 Reason Tags', lines });
+  }
+
+  // ── 3. Anomaly Flag (>20% week-over-week spike per tag) ──
+  {
+    const w1 = new Date(today); w1.setDate(w1.getDate() - 7);
+    const w2 = new Date(today); w2.setDate(w2.getDate() - 14);
+    const thisWeek = all.filter(r => r.date >= w1 && r.date <= today);
+    const lastWeek = all.filter(r => r.date >= w2 && r.date < w1);
+    const lwByTag = {}; lastWeek.forEach(r => lwByTag[r.tag] = (lwByTag[r.tag] || 0) + 1);
+    const twByTag = {}; thisWeek.forEach(r => twByTag[r.tag] = (twByTag[r.tag] || 0) + 1);
+    const spikes = [];
+    Object.keys(twByTag).forEach(tag => {
+      const prev = lwByTag[tag] || 0;
+      if (prev >= 3) {
+        const ch = (twByTag[tag] - prev) / prev * 100;
+        if (ch > 20) spikes.push({ tag, ch, now: twByTag[tag], prev });
+      }
+    });
+    spikes.sort((a, b) => b.ch - a.ch);
+    const lines = spikes.length
+      ? spikes.slice(0, 4).map(s => `⚠️ ${s.tag}: ▲ +${s.ch.toFixed(0)}% WoW (${s.prev}→${s.now})`)
+      : ['No tags spiked >20% week-over-week. ✓'];
+    cards.push({ title: '🚨 Anomaly Flag', good: !spikes.length, lines });
+  }
+
+  // ── 4. Agent Outliers (>1.5x team avg; names suppressed) ──
+  {
+    const agents = byAgent(last30);
+    const lines = [];
+    if (agents.length) {
+      const avg = last30.length / agents.length;
+      const outliers = agents.filter(([, d]) => d.total > avg * 1.5);
+      if (outliers.length) {
+        outliers.slice(0, 5).forEach(([, d], i) => {
+          const label = 'Agent ' + String.fromCharCode(65 + i); // A, B, C…
+          lines.push(`${label}: ${d.total} refunds (${(d.total / avg).toFixed(1)}× team avg)`);
+        });
+        lines.push(`Team avg: ${avg.toFixed(1)} refunds/agent (last 30d)`);
+      } else {
+        lines.push('No agents above 1.5× team average. ✓');
+      }
+    } else {
+      lines.push('No agent data in the last 30 days.');
+    }
+    cards.push({ title: '👤 Agent Outliers', note: 'Names anonymized', lines });
+  }
+
+  // ── 5. Site Comparison (TPO vs RBO refund rate) ──
+  {
+    const tpo = STATE.refunds.filter(r => r.site === 'TPO' && r.date >= d30);
+    const rbo = STATE.refunds.filter(r => r.site === 'RBO' && r.date >= d30);
+    const lines = [
+      `TPO: ${tpo.length} refunds · ${formatCurrency(sumAmount(tpo))}`,
+      `RBO: ${rbo.length} refunds · ${formatCurrency(sumAmount(rbo))}`
+    ];
+    const delta = tpo.length && rbo.length
+      ? `Delta: TPO is ${tpo.length > rbo.length ? '▲' : '▼'} ${Math.abs((tpo.length - rbo.length) / rbo.length * 100).toFixed(0)}% vs RBO (volume)`
+      : 'Delta: need both sites with data to compare.';
+    lines.push(delta);
+    cards.push({ title: '⚖️ Site Comparison', lines });
+  }
+
+  // ── 6. Data Freshness (days since last ingestion per source) ──
+  {
+    const now = Date.now();
+    const lines = [];
+    if (STATE.sources.length) {
+      STATE.sources
+        .slice()
+        .sort((a, b) => (new Date(a.last_refreshed_at || 0)) - (new Date(b.last_refreshed_at || 0)))
+        .slice(0, 5)
+        .forEach(s => {
+          if (!s.last_refreshed_at) { lines.push(`${s.source_name}: never refreshed ●`); return; }
+          const days = Math.floor((now - new Date(s.last_refreshed_at).getTime()) / 86400000);
+          lines.push(`${s.source_name}: ${days <= 0 ? 'today' : days + 'd ago'}`);
+        });
+    } else {
+      lines.push('No sources registered yet.');
+    }
+    cards.push({ title: '🕒 Data Freshness', lines });
+  }
+
+  return cards;
+}
+
+// Keep the most recent set of cards available for the export buttons
+let _insightCardData = [];
+
+function renderInsightCards() {
+  const wrap = document.getElementById('aiInsightCards');
+  if (!wrap) return;
+  if (!applySiteFilter(STATE.refunds).length) {
+    wrap.innerHTML = '<div class="empty-state span-2"><div class="empty-icon">📇</div><p>Load data to see computed insight cards.</p></div>';
+    return;
+  }
+  _insightCardData = computeInsightCards();
+  wrap.innerHTML = _insightCardData.map((c, i) => {
+    const accent = c.good === true ? 'var(--success)' : c.good === false ? 'var(--danger)' : 'var(--primary)';
+    const body = c.lines.map(l => `<div style="font-size:12.5px; line-height:1.6; color:var(--text); white-space:pre-wrap;">${escapeHtml(l)}</div>`).join('');
+    return `<div class="card" style="border-left:3px solid ${accent}; display:flex; flex-direction:column;">
+      <div class="card-title" style="margin-bottom:8px;">${c.title}${c.note ? ` <span style="text-transform:none; color:var(--text-light); font-weight:600;">· ${escapeHtml(c.note)}</span>` : ''}</div>
+      <div style="flex:1;">${body}</div>
+      <div style="display:flex; gap:6px; margin-top:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="exportInsightCard(${i})">📋 Export</button>
+        <button class="btn btn-outline btn-sm" onclick="copyInsightCardAsPrompt(${i})">✨ Copy as AI prompt</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function insightCardToText(c) {
+  return `${c.title}${c.note ? ' (' + c.note + ')' : ''}\n${c.lines.join('\n')}`;
+}
+
+function exportInsightCard(i) {
+  const c = _insightCardData[i]; if (!c) return;
+  navigator.clipboard.writeText(insightCardToText(c))
+    .then(() => toast('✓ Card copied to clipboard'))
+    .catch(() => toast('⚠️ Clipboard not available', true));
+}
+
+function copyInsightCardAsPrompt(i) {
+  const c = _insightCardData[i]; if (!c) return;
+  const site = STATE.siteFilter === 'ALL' ? 'RBO + TPO' : STATE.siteFilter;
+  const prompt = `You are a Customer Service Operations analyst. Here is a computed insight from our refund data (site scope: ${site}):
+
+${insightCardToText(c)}
+
+Explain what is driving this, whether it threatens our monthly refund-reduction OKR, and recommend 2-3 specific actions that contain cost without hurting CSAT.`;
+  navigator.clipboard.writeText(prompt)
+    .then(() => toast('✓ AI prompt copied — paste into Gemini or ChatGPT'))
+    .catch(() => toast('⚠️ Clipboard not available', true));
 }
 
 async function callGemini(prompt) {
@@ -2508,7 +3242,11 @@ function requestGoogleAuth(scopes, callback) {
 }
 
 // ════════════════════════════════════════════════════════
-// V3 — GOOGLE SHEETS BACKEND (placeholder; Sprint 1 work)
+// V3 — GOOGLE SHEETS BACKEND
+// Reads three tabs from "RIH Master Data" in one batchGet:
+//   refunds_master!A2:M  (13 cols — col H is the new currency field)
+//   okr_targets!A2:F     → STATE.okrTargets (drives the Overview OKR banner)
+//   sources_registry!A2:F → merged into STATE.sources (pre-seeds the Sources tab)
 // ════════════════════════════════════════════════════════
 async function loadFromSheet() {
   if (!STATE.settings.sheetId) { toast('⚠️ Set the Sheet ID in Settings first.', true); return; }
@@ -2517,28 +3255,110 @@ async function loadFromSheet() {
     return;
   }
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${STATE.settings.sheetId}/values/${encodeURIComponent('refunds_master!A2:L')}`;
+    const ranges = ['refunds_master!A2:M', 'okr_targets!A2:F', 'sources_registry!A2:F'];
+    const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${STATE.settings.sheetId}/values:batchGet?${qs}`;
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + STATE.googleAccessToken } });
-    if (!res.ok) throw new Error('Sheets read failed: ' + res.status);
+    if (res.status === 401 || res.status === 403) {
+      // Token expired or insufficient scope — drop it and re-auth once
+      STATE.googleAccessToken = null;
+      toast('⚠️ Sheets access denied — re-authorizing…', true);
+      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly'], () => loadFromSheet());
+      return;
+    }
+    if (res.status === 404) { toast('⚠️ Sheet not found — check the Sheet ID in Settings.', true); return; }
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      const detail = errBody.error?.message || '';
+      // A missing tab name surfaces as 400 "Unable to parse range"
+      if (/Unable to parse range|not found/i.test(detail)) {
+        toast('⚠️ Schema mismatch — expected tabs refunds_master / okr_targets / sources_registry.', true);
+        return;
+      }
+      throw new Error('Sheets read failed: ' + res.status + (detail ? ' — ' + detail : ''));
+    }
     const data = await res.json();
-    const rows = (data.values || []).filter(r => r[1]);  // skip blank rows
-    const refunds = rows.map(r => ({
-      refund_id: r[0],
-      dateStr: r[1],
-      date: new Date(r[1]),
-      site: r[2] || 'TPO',
-      team: r[3] || 'CS',
-      source: r[4] || 'Unknown',
-      tag: r[5] || 'Untagged',
-      amount: parseFloat(r[6]) || 0,
-      agent: r[7] || 'Unknown',
-      ticketId: r[8] || '',
-      orderId: r[9] || '',
-      ingested_at: r[10] || '',
-      ingested_by: r[11] || ''
-    })).filter(r => !isNaN(r.date));
-    if (!refunds.length) { toast('No refund rows found in Sheet.', true); return; }
-    loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded from Sheet`);
+    const byRange = {};
+    (data.valueRanges || []).forEach(vr => {
+      // vr.range looks like "refunds_master!A2:M13" — key on the tab name
+      const tab = (vr.range || '').split('!')[0].replace(/^'|'$/g, '');
+      byRange[tab] = vr.values || [];
+    });
+
+    // ─── refunds_master (required) ───
+    const refundRows = (byRange['refunds_master'] || []).filter(r => r[1]); // need a date
+    if (!refundRows.length) { toast('No refund rows found in refunds_master.', true); return; }
+    // Schema sanity check: a valid row carries at least through the amount column (G)
+    if (refundRows.some(r => r.length < 7)) {
+      toast('⚠️ Schema mismatch in refunds_master — expected 13 columns (A:M).', true);
+      return;
+    }
+    const refunds = refundRows.map(r => {
+      const cur = (r[7] || 'USD').toString().trim().toUpperCase();
+      const amt = parseFloat(r[6]) || 0;
+      const isAUD = cur === 'AUD';
+      return {
+        refund_id: r[0],
+        dateStr: (r[1] || '').toString().substring(0, 10),
+        date: new Date(r[1]),
+        site: r[2] || 'TPO',
+        team: r[3] || 'CS',
+        source: r[4] || 'Unknown',
+        tag: r[5] || 'Untagged',
+        // AUD rows are converted to USD once the rate locks (applyAUDConversions)
+        amount: isAUD ? 0 : amt,
+        nativeAmtAUD: isAUD ? amt : undefined,
+        sourceCurrency: isAUD ? 'AUD' : 'USD',
+        agent: r[8] || 'Unknown',
+        ticketId: r[9] || '',
+        orderId: r[10] || '',
+        ingested_at: r[11] || '',
+        ingested_by: r[12] || ''
+      };
+    }).filter(r => !isNaN(r.date));
+    if (!refunds.length) { toast('⚠️ No valid dates in refunds_master — check column B.', true); return; }
+
+    // ─── okr_targets (optional) ───
+    const okrRows = byRange['okr_targets'] || [];
+    STATE.okrTargets = okrRows.filter(r => r[0]).map(r => ({
+      metric:     (r[0] || '').toString().trim(),
+      target:     parseFloat(r[1]) || 0,
+      unit:       (r[2] || '').toString().trim(),
+      direction:  (r[3] || 'lower_is_better').toString().trim(),
+      label:      (r[4] || r[0] || '').toString().trim(),
+      updated_at: (r[5] || '').toString().trim()
+    }));
+
+    // ─── sources_registry (optional) — merge, don't clobber in-session sources ───
+    const regRows = byRange['sources_registry'] || [];
+    const existingIds = new Set(STATE.sources.map(s => s.source_id));
+    regRows.filter(r => r[0]).forEach(r => {
+      const name = (r[0] || '').toString().trim();
+      const site = (r[2] || 'ALL').toString().trim();
+      const id = name.toLowerCase().replace(/[^a-z]+/g, '-') + '-' + site.toLowerCase();
+      if (existingIds.has(id)) return;
+      existingIds.add(id);
+      STATE.sources.push({
+        source_id: id,
+        source_name: name,
+        team: (r[1] || 'CS').toString().trim(),
+        site,
+        method: (r[3] || 'csv-upload').toString().trim(),
+        cadence: 'weekly',
+        last_refreshed_at: (r[5] || '').toString().trim() || null,
+        owner_email: STATE.settings.userEmail || '',
+        confidentiality_level: parseInt(r[4]) || 2
+      });
+    });
+    sessionStorage.setItem('rih_sources', JSON.stringify(STATE.sources));
+
+    const extras = [];
+    if (STATE.okrTargets.length) extras.push(`${STATE.okrTargets.length} OKR target${STATE.okrTargets.length !== 1 ? 's' : ''}`);
+    if (regRows.length) extras.push(`${regRows.length} registry source${regRows.length !== 1 ? 's' : ''}`);
+    const suffix = extras.length ? ` · ${extras.join(' · ')}` : '';
+    loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded from Sheet${suffix}`);
+    renderSources();
+    renderOverview();  // refresh the OKR banner now that okrTargets are loaded
   } catch (e) {
     toast('⚠️ Sheet load failed: ' + e.message, true);
   }
@@ -2568,6 +3388,11 @@ function toast(msg, isError = false) {
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
+// Strip any un-injected build placeholders so local/preview runs degrade gracefully
+// (the deployed build replaces these via GitHub Actions before serving).
+['googleClientId', 'settingsPasswordHash'].forEach(k => {
+  if (isPlaceholder(STATE.settings[k])) STATE.settings[k] = '';
+});
 loadSettingsUI();
 updateDots();
 </script>
