@@ -19,8 +19,9 @@ To go live, in the GitHub repo:
 1. **Add repo Secrets** (Settings → Secrets and variables → Actions):
    - `SETTINGS_PASSWORD` — the settings-panel password (the workflow stores only its SHA-256 hash).
    - `GOOGLE_CLIENT_ID` — the OAuth Client ID.
+   - `SHEET_ID` — the master Google Sheet ID, so every user auto-connects (and uploads auto-publish) without entering it. Kept out of the public source via injection.
 
-   The first workflow run fails at the inject step until both exist — that's expected. Re-run after adding them.
+   The first workflow run warns if `SHEET_ID` is empty and fails at the inject step until the placeholders are replaced. Re-run after adding the secrets.
 
 2. **Set the Pages source to GitHub Actions** (Settings → Pages → Build and deployment → Source = **GitHub Actions**).
    ⚠️ Do **not** use "Deploy from a branch" — that serves the raw source with placeholders un-injected (broken password + OAuth) and bypasses secret injection.
@@ -35,6 +36,10 @@ To go live, in the GitHub repo:
    - `refunds_master` — A:M: `refund_id, date, site, team, source, tag, amount, currency, agent, ticket_id, order_id, ingested_at, ingested_by`
    - `okr_targets` — A:F: `metric, target, unit, direction, label, updated_at`
    - `sources_registry` — A:F: `name, team, site, type, conf_level, last_updated`
+
+## Shared data
+
+The Google Sheet is the single shared source of truth. Uploading a file (CSV / Excel / Drive) auto-publishes its rows to `refunds_master`, and the app auto-loads from the Sheet on open — so coworkers see the same data without re-uploading. Publishing uses **replace-by-source**: re-uploading a given source+site refreshes those rows instead of duplicating them. (Reads/writes still require each user's own Google sign-in; concurrent edits are last-write-wins.) Sample/demo data is never published.
 
 ## Security note
 

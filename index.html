@@ -991,7 +991,7 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
 // repo Secrets). The repo source only ever holds the __…_PLACEHOLDER__ tokens.
 // ════════════════════════════════════════════════════════
 const SITE_CONFIG = {
-  sheetId:             '',          // Level 2 — paste your Master Sheet ID
+  sheetId:             '__SHEET_ID_PLACEHOLDER__', // injected at build time (SHEET_ID secret) so all users auto-connect
   googleClientId:      '__GOOGLE_CLIENT_ID_PLACEHOLDER__', // injected at build time (GOOGLE_CLIENT_ID secret)
   userEmail:           '',          // your work email
   sopDocIdTpo:         '',          // TPO SOP Google Doc ID
@@ -1099,7 +1099,7 @@ function saveSettings() {
     geminiKey: v('geminiKey'), googleClientId: v('googleClientId') || STATE.settings.googleClientId,
     sopDocIdTpo: v('sopDocIdTpo'),
     sopDocIdRbo: v('sopDocIdRbo'),
-    sheetId: v('sheetId'),
+    sheetId: v('sheetId') || STATE.settings.sheetId,
     userEmail: v('userEmail')
     // okrTarget removed — OKR targets now live in the okr_targets Sheet tab (editable via Overview ✏️ Edit OKRs)
   };
@@ -1667,60 +1667,76 @@ function loadData(refunds, statusMsg, opts = {}) {
   if (!STATE.usdToAudRate) fetchExchangeRate();
 
   // Shared persistence: auto-publish uploaded rows to the Sheet so coworkers see them
-  if (opts.publish) appendRefundsToSheet(refunds);
+  if (opts.publish) publishRefundsToSheet(refunds);
 }
 
 // ════════════════════════════════════════════════════════
 // V3 — SHARED PERSISTENCE: write uploaded rows back to refunds_master
-// (auto-publish on every upload; the Sheet is the single shared source of truth)
+// "Replace rows for this source": for every source+site present in the upload,
+// existing rows in the Sheet are removed and replaced with the fresh set, so
+// re-uploading a source refreshes it cleanly instead of duplicating.
+// (Read-filter-rewrite; last write wins on concurrent edits.)
 // ════════════════════════════════════════════════════════
-async function appendRefundsToSheet(refunds) {
+function refundToSheetRow(r, now, who) {
+  const isAUD = r.sourceCurrency === 'AUD';
+  // Persist the native amount + currency so AUD rows round-trip faithfully
+  const amount = isAUD ? (r.nativeAmtAUD ?? '') : (r.amount ?? '');
+  return [
+    r.refund_id || ('rih-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)),
+    r.dateStr || '', r.site || '', r.team || '', r.source || '', r.tag || '',
+    amount, isAUD ? 'AUD' : 'USD', r.agent || '', r.ticketId || '', r.orderId || '',
+    now, who
+  ];
+}
+
+async function publishRefundsToSheet(refunds) {
   if (!refunds || !refunds.length) return;
   if (!STATE.settings.sheetId) {
     toast('ℹ️ No Sheet ID set — data is local only, not shared. Add it in ⚙️ Settings to publish.', true);
     return;
   }
   if (!STATE.googleAccessToken) {
-    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => appendRefundsToSheet(refunds));
+    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => publishRefundsToSheet(refunds));
     return;
   }
+  const sheetId = STATE.settings.sheetId;
+  const authHeader = { Authorization: 'Bearer ' + STATE.googleAccessToken };
+  const reauth = () => { STATE.googleAccessToken = null; requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => publishRefundsToSheet(refunds)); };
   try {
     const now = new Date().toISOString();
     const who = STATE.settings.userEmail || '';
-    const values = refunds.map(r => {
-      const isAUD = r.sourceCurrency === 'AUD';
-      // Persist the native amount + currency so AUD rows round-trip faithfully
-      const amount = isAUD ? (r.nativeAmtAUD ?? '') : (r.amount ?? '');
-      return [
-        r.refund_id || ('rih-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)),
-        r.dateStr || '',
-        r.site || '',
-        r.team || '',
-        r.source || '',
-        r.tag || '',
-        amount,
-        isAUD ? 'AUD' : 'USD',
-        r.agent || '',
-        r.ticketId || '',
-        r.orderId || '',
-        now,
-        who
-      ];
-    });
-    const range = encodeURIComponent('refunds_master!A:M');
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${STATE.settings.sheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + STATE.googleAccessToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values })
-    });
-    if (res.status === 401 || res.status === 403) {
-      STATE.googleAccessToken = null;
-      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => appendRefundsToSheet(refunds));
-      return;
+    // Which source+site combos this upload replaces (a file can map to >1 site)
+    const replaceKeys = new Set(refunds.map(r => `${r.source}||${r.site}`));
+    const newRows = refunds.map(r => refundToSheetRow(r, now, who));
+
+    // 1. Read existing rows so we can drop the ones we're replacing
+    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2:M')}`;
+    const readRes = await fetch(readUrl, { headers: authHeader });
+    if (readRes.status === 401 || readRes.status === 403) { reauth(); return; }
+    if (!readRes.ok) throw new Error('read failed: ' + readRes.status);
+    const existing = (await readRes.json()).values || [];
+    // col C (index 2) = site, col E (index 4) = source
+    const kept = existing.filter(row => !replaceKeys.has(`${row[4] || ''}||${row[2] || ''}`));
+    const removed = existing.length - kept.length;
+    const combined = kept.concat(newRows);
+
+    // 2. Clear the data range, then write the combined set back from A2
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2:M')}:clear`;
+    const clearRes = await fetch(clearUrl, { method: 'POST', headers: authHeader });
+    if (clearRes.status === 401 || clearRes.status === 403) { reauth(); return; }
+    if (!clearRes.ok) throw new Error('clear failed: ' + clearRes.status);
+
+    if (combined.length) {
+      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2')}?valueInputOption=RAW`;
+      const writeRes = await fetch(writeUrl, {
+        method: 'PUT',
+        headers: { ...authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: combined })
+      });
+      if (writeRes.status === 401 || writeRes.status === 403) { reauth(); return; }
+      if (!writeRes.ok) throw new Error('write failed: ' + writeRes.status);
     }
-    if (!res.ok) throw new Error('append failed: ' + res.status);
-    toast(`☁️ Published ${values.length.toLocaleString()} rows to the shared Sheet`);
+    toast(`☁️ Published ${newRows.length.toLocaleString()} rows${removed ? ` · replaced ${removed.toLocaleString()}` : ''} in the shared Sheet`);
   } catch (e) {
     toast('⚠️ Publish to Sheet failed (data is local only): ' + e.message, true);
   }
@@ -3451,7 +3467,7 @@ function toast(msg, isError = false) {
 // ════════════════════════════════════════════════════════
 // Strip any un-injected build placeholders so local/preview runs degrade gracefully
 // (the deployed build replaces these via GitHub Actions before serving).
-['googleClientId', 'settingsPasswordHash'].forEach(k => {
+['googleClientId', 'settingsPasswordHash', 'sheetId'].forEach(k => {
   if (isPlaceholder(STATE.settings[k])) STATE.settings[k] = '';
 });
 loadSettingsUI();
