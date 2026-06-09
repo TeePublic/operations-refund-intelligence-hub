@@ -5,10 +5,10 @@ Single-file HTML tool for cross-functional refund analysis (CS, Supply Chain, Lo
 ## Live URL
 
 ```
-https://sloanewi.github.io/refund-intelligence-hub/
+https://teepublic.github.io/refund-intelligence-hub/
 ```
 
-(Trailing slash matters — `index.html` is served at that path. The exact URL also appears on each successful workflow run under the `github-pages` environment, and on Settings → Pages.)
+Access is restricted (private Pages) to TeePublic org members with read access to this repo. The exact URL also appears on each successful workflow run under the `github-pages` environment, and on Settings → Pages.
 
 ## Deploy setup
 
@@ -26,9 +26,9 @@ To go live, in the GitHub repo:
 2. **Set the Pages source to GitHub Actions** (Settings → Pages → Build and deployment → Source = **GitHub Actions**).
    ⚠️ Do **not** use "Deploy from a branch" — that serves the raw source with placeholders un-injected (broken password + OAuth) and bypasses secret injection.
 
-3. **Authorize the Pages origin for OAuth.** In the Google Cloud console (APIs & Services → Credentials → your OAuth client), add to **Authorized JavaScript origins**:
+3. **Authorize the Pages origin for OAuth.** In the Google Cloud console (APIs & Services → Credentials → your OAuth client), add to **Authorized JavaScript origins** (origin only, no path/trailing slash):
    ```
-   https://sloanewi.github.io
+   https://teepublic.github.io
    ```
    Without this, Google Sheets / Drive / Gmail auth is rejected on the live site.
 
