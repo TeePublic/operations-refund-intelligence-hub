@@ -1,0 +1,2576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Refund Intelligence Hub v3 — TeePublic + Redbubble</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --primary: #A03877;
+  --primary-dark: #7A2A5A;
+  --primary-light: #C45A99;
+  --primary-xlight: #F3E0EC;
+  --accent: #E8B4D4;
+  --bg: #F7F4F8;
+  --surface: #FFFFFF;
+  --surface2: #FDF8FB;
+  --border: #E8DDF0;
+  --text: #1E1428;
+  --text-secondary: #6B5A7E;
+  --text-light: #9B8AAE;
+  --success: #2D9E6B;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --shadow: 0 2px 12px rgba(160,56,119,0.08);
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+/* Header */
+.app-header { background: linear-gradient(135deg, var(--primary-dark), var(--primary)); color: white; padding: 0 24px; height: 58px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(122,42,90,0.25); position: sticky; top: 0; z-index: 100; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-icon { width: 34px; height: 34px; background: rgba(255,255,255,0.18); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.brand-name { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.brand-badge { background: rgba(255,255,255,0.2); font-size: 10px; padding: 2px 9px; border-radius: 20px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.data-status { font-size: 12px; color: rgba(255,255,255,0.75); }
+.btn-icon { background: rgba(255,255,255,0.15); border: none; color: white; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+.btn-icon:hover { background: rgba(255,255,255,0.28); }
+
+/* Nav */
+.app-nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 24px; overflow-x: auto; }
+.nav-tab { padding: 13px 16px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.2s; user-select: none; }
+.nav-tab:hover { color: var(--primary); }
+.nav-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* Main */
+.app-main { padding: 22px; max-width: 1400px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Source Bar */
+.source-bar { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.source-chip { display: flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 8px; font-size: 11px; font-weight: 600; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-secondary); }
+.dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot-green { background: #22c55e; } .dot-yellow { background: #f59e0b; } .dot-red { background: #ef4444; }
+
+/* Cards */
+.card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 18px 20px; box-shadow: var(--shadow); }
+.card-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9px; color: var(--text-light); margin-bottom: 14px; }
+
+/* KPI Grid */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.kpi-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 18px 20px; box-shadow: var(--shadow); }
+.kpi-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-light); margin-bottom: 8px; }
+.kpi-value { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1; margin-bottom: 6px; font-feature-settings: "tnum"; }
+.kpi-sub { font-size: 12px; color: var(--text-secondary); }
+.change-up { color: var(--danger); font-weight: 600; }
+.change-down { color: var(--success); font-weight: 600; }
+
+/* OKR Bar */
+.okr-bar-wrap { background: var(--bg); border-radius: 6px; height: 8px; overflow: hidden; margin: 8px 0 6px; }
+.okr-bar { height: 100%; border-radius: 6px; background: var(--primary); transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+.okr-bar.on-track { background: var(--success); }
+.okr-bar.off-track { background: var(--danger); }
+
+/* Grids */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.span-2 { grid-column: span 2; }
+
+/* Charts */
+.chart-wrap { position: relative; height: 270px; }
+.chart-wrap.tall { height: 340px; }
+
+/* Tables */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); border-bottom: 2px solid var(--border); background: var(--bg); white-space: nowrap; }
+.data-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.data-table tr:hover td { background: var(--primary-xlight); }
+.tag-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--primary-xlight); color: var(--primary-dark); white-space: nowrap; }
+.flag-high td:first-child { border-left: 3px solid var(--danger); }
+
+/* Filters */
+.filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-bar label { font-size: 12px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+select, input[type="date"], input[type="text"], input[type="password"], input[type="number"] {
+  border: 1.5px solid var(--border); border-radius: 7px; padding: 6px 10px; font-size: 13px; background: var(--surface); color: var(--text); outline: none; font-family: inherit;
+}
+select:focus, input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(160,56,119,0.1); }
+
+/* Buttons */
+.btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 7px; font-family: inherit; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-outline { background: transparent; border: 1.5px solid var(--primary); color: var(--primary); }
+.btn-outline:hover { background: var(--primary-xlight); }
+.btn-ghost { background: var(--bg); border: 1.5px solid var(--border); color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--border); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-danger { background: #fef2f2; border: 1.5px solid #fecaca; color: var(--danger); }
+
+/* Upload Zone */
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.upload-zone:hover, .upload-zone.drag-over { border-color: var(--primary); background: var(--primary-xlight); }
+.upload-icon { font-size: 36px; margin-bottom: 8px; }
+.upload-zone p { font-size: 13px; color: var(--text-secondary); }
+.upload-zone strong { color: var(--primary); }
+
+/* AI Panel */
+.ai-panel { background: linear-gradient(135deg, var(--primary-xlight), var(--surface2)); border: 1px solid var(--accent); border-radius: var(--radius); padding: 18px; }
+.ai-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.ai-chip { padding: 5px 11px; border-radius: 20px; background: white; border: 1.5px solid var(--accent); font-size: 12px; font-weight: 600; color: var(--primary-dark); cursor: pointer; transition: all 0.2s; }
+.ai-chip:hover { background: var(--primary); color: white; border-color: var(--primary); }
+.ai-input-row { display: flex; gap: 8px; }
+.ai-input-row input { flex: 1; }
+.ai-response { margin-top: 14px; padding: 14px; background: white; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; line-height: 1.65; min-height: 72px; white-space: pre-wrap; color: var(--text); }
+.ai-loading { color: var(--text-light); font-style: italic; }
+
+/* SOP */
+.sop-content { font-size: 13px; line-height: 1.75; color: var(--text); max-height: 480px; overflow-y: auto; }
+.sop-content h2 { color: var(--primary-dark); font-size: 15px; margin: 18px 0 6px; }
+.sop-content h3 { color: var(--text); font-size: 13px; font-weight: 700; margin: 12px 0 4px; }
+.sop-content p { margin-bottom: 6px; }
+mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; }
+
+/* Test Cards */
+.test-card { border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; background: var(--surface); }
+.test-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.test-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.test-status { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+.status-active { background: #dcfce7; color: #166534; }
+.status-done { background: var(--primary-xlight); color: var(--primary-dark); }
+.stat-box { text-align: center; padding: 12px; background: var(--bg); border-radius: 8px; }
+.stat-box-value { font-size: 26px; font-weight: 800; }
+.stat-box-label { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(30,20,40,0.55); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: 16px; padding: 26px 28px; width: 500px; max-width: 95vw; max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.modal-title { font-size: 17px; font-weight: 800; color: var(--primary-dark); margin-bottom: 18px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 5px; }
+.form-group input { width: 100%; }
+.form-hint { font-size: 11px; color: var(--text-light); margin-top: 3px; }
+.modal-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.modal-actions { display: flex; gap: 8px; margin-top: 6px; }
+
+/* Empty State */
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-secondary); }
+.empty-icon { font-size: 44px; margin-bottom: 10px; }
+.empty-state p { font-size: 13px; }
+
+/* Toast */
+.toast { position: fixed; bottom: 22px; right: 22px; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; color: white; z-index: 9999; box-shadow: 0 4px 20px rgba(0,0,0,0.18); transition: opacity 0.3s ease; }
+
+/* ═══ V3 ADDITIONS ═══ */
+
+/* Site filter chips */
+.filter-chip-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-chip-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.filter-chip { padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text-secondary); user-select: none; }
+.filter-chip:hover { border-color: var(--primary-light); }
+.filter-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+.filter-chip-note { font-size: 11px; color: var(--text-light); font-style: italic; margin-left: 8px; }
+
+/* Source provenance pills (used in AI responses + sources tab) */
+.source-pill { display: inline-block; padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.source-pill.team-cs { background: #FBEAF0; color: #72243E; }
+.source-pill.team-sc { background: #E1F5EE; color: #085041; }
+.source-pill.team-log { background: #E6F1FB; color: #0C447C; }
+
+/* Freshness indicators */
+.freshness-fresh { color: var(--success); }
+.freshness-stale { color: var(--warning); }
+.freshness-missing { color: var(--danger); }
+
+/* AI insight banner */
+.ai-insight-banner { background: linear-gradient(135deg, var(--primary-xlight), var(--surface2)); border-left: 4px solid var(--primary); border-radius: 8px; padding: 14px 16px; margin: 0 0 18px; }
+.ai-insight-label { font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+.ai-insight-body { font-size: 13px; line-height: 1.65; color: var(--text); }
+
+/* Sources tab grid */
+.source-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.source-table th { text-align: left; padding: 10px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); }
+.source-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.source-table tr:hover td { background: var(--primary-xlight); }
+.source-summary-bar { background: var(--bg); border-radius: 6px; padding: 10px 14px; display: flex; gap: 16px; font-size: 12px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+/* History tab comparison */
+.history-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.history-control-group { display: flex; align-items: center; gap: 8px; }
+
+/* Report template cards */
+.template-card { border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; font-size: 12px; transition: all 0.15s; background: var(--surface); margin-bottom: 6px; }
+.template-card:hover { border-color: var(--primary-light); }
+.template-card.selected { border-color: var(--primary); background: var(--primary-xlight); color: var(--primary-dark); font-weight: 600; }
+.email-preview { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; max-height: 360px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+.email-preview h2 { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: var(--primary-dark); }
+.email-preview p { margin-bottom: 8px; }
+.email-preview .change-up { color: var(--danger); font-weight: 600; }
+.email-preview .change-down { color: var(--success); font-weight: 600; }
+.email-preview table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+.email-preview th, .email-preview td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+.email-preview th { font-weight: 700; background: var(--bg); }
+
+/* Disabled / Phase 2 button */
+.btn-disabled { background: var(--bg); border: 1.5px solid var(--border); color: var(--text-light); cursor: not-allowed; }
+
+@media (max-width: 800px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ MODALS ═══════════════════ -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-title">⚙️ Settings &amp; Connections</div>
+    <div class="form-group">
+      <label style="font-weight:700;color:#5C2D6E;">Zendesk — TPO (TeePublic)</label>
+    </div>
+    <div class="form-group">
+      <label>Subdomain</label>
+      <input type="text" id="zdSubdomain" placeholder="e.g. teepublic">
+      <div class="form-hint">The part before .zendesk.com</div>
+    </div>
+    <div class="form-group">
+      <label>Agent Email</label>
+      <input type="text" id="zdEmail" placeholder="you@teepublic.com">
+    </div>
+    <div class="form-group">
+      <label>API Token</label>
+      <input type="password" id="zdToken" placeholder="TPO API token">
+      <div class="form-hint">⚠️ Stored in sessionStorage only — cleared when browser closes.</div>
+    </div>
+    <div class="form-group">
+      <label style="font-weight:700;color:#5C2D6E;">Zendesk — RBO (Redbubble)</label>
+    </div>
+    <div class="form-group">
+      <label>Subdomain</label>
+      <input type="text" id="zdSubdomainRbo" placeholder="e.g. redbubble">
+      <div class="form-hint">The part before .zendesk.com</div>
+    </div>
+    <div class="form-group">
+      <label>Agent Email</label>
+      <input type="text" id="zdEmailRbo" placeholder="you@redbubble.com">
+    </div>
+    <div class="form-group">
+      <label>API Token</label>
+      <input type="password" id="zdTokenRbo" placeholder="RBO API token">
+      <div class="form-hint">⚠️ Stored in sessionStorage only — cleared when browser closes.</div>
+    </div>
+    <hr class="modal-divider">
+    <div class="form-group">
+      <label>Google Gemini API Key</label>
+      <input type="password" id="geminiKey" placeholder="Your Gemini API key">
+      <div class="form-hint">⚠️ Stored in sessionStorage only — cleared when browser closes.</div>
+    </div>
+    <hr class="modal-divider">
+    <div class="form-group">
+      <label>Google OAuth Client ID (for SOP Docs)</label>
+      <input type="text" id="googleClientId" placeholder="xxx.apps.googleusercontent.com">
+      <div class="form-hint">Create at console.cloud.google.com → APIs &amp; Services → Credentials</div>
+    </div>
+    <div class="form-group">
+      <label>TPO (TeePublic) SOP Google Doc ID</label>
+      <input type="text" id="sopDocIdTpo" placeholder="Paste the Doc ID from the URL">
+      <div class="form-hint">The string between /d/ and /edit in the TPO SOP URL</div>
+    </div>
+    <div class="form-group">
+      <label>RBO (Redbubble) SOP Google Doc ID</label>
+      <input type="text" id="sopDocIdRbo" placeholder="Paste the Doc ID from the URL">
+      <div class="form-hint">The string between /d/ and /edit in the RBO SOP URL</div>
+    </div>
+    <hr class="modal-divider">
+    <div class="form-group">
+      <label>Google Sheet ID (v3 backend)</label>
+      <input type="text" id="sheetId" placeholder="The string between /d/ and /edit in the Sheet URL">
+      <div class="form-hint">The shared Sheet that stores all refund data across teams.</div>
+    </div>
+    <div class="form-group">
+      <label>Your Email (for audit trail)</label>
+      <input type="text" id="userEmail" placeholder="you@teepublic.com">
+      <div class="form-hint">Recorded as ingested_by on every row you upload.</div>
+    </div>
+    <hr class="modal-divider">
+    <div class="form-group">
+      <label>Monthly OKR Target (% Reduction)</label>
+      <input type="number" id="okrTarget" value="5" min="1" max="50" step="0.5" style="width:100px;">
+    </div>
+    
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+      <button class="btn btn-ghost" onclick="closeModal('settingsModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addTestModal">
+  <div class="modal">
+    <div class="modal-title">➕ New Deflection Test</div>
+    <div class="form-group">
+      <label>Test Name</label>
+      <input type="text" id="testName" placeholder="e.g. April $5 Exchange Coupon">
+    </div>
+    <div class="form-group">
+      <label>Hypothesis</label>
+      <input type="text" id="testHypothesis" placeholder="e.g. $5 coupon reduces Changed Mind refunds by 10%+">
+    </div>
+    <div class="form-group">
+      <label>Focused Reason Tag (optional)</label>
+      <input type="text" id="testTag" placeholder="e.g. Edit Req. - Changed Mind">
+    </div>
+    <hr class="modal-divider">
+    <div class="form-group">
+      <label>Baseline Period — Start</label>
+      <input type="date" id="testPeriodAStart">
+    </div>
+    <div class="form-group">
+      <label>Baseline Period — End</label>
+      <input type="date" id="testPeriodAEnd">
+    </div>
+    <div class="form-group">
+      <label>Test Period — Start</label>
+      <input type="date" id="testPeriodBStart">
+    </div>
+    <div class="form-group">
+      <label>Test Period — End</label>
+      <input type="date" id="testPeriodBEnd">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveTest()">Add Test</button>
+      <button class="btn btn-ghost" onclick="closeModal('addTestModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ HEADER ═══════════════════ -->
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-icon">📊</div>
+    <span class="brand-name">Refund Intelligence Hub</span>
+    <span class="brand-badge">V3 · UNIFIED</span>
+  </div>
+  <div class="header-right">
+    <span class="data-status" id="dataStatus">No data loaded</span>
+    <button onclick="document.getElementById('csvFile').click()" title="Upload CSV" style="background:rgba(255,255,255,0.15);border:none;color:white;height:34px;padding:0 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background 0.2s;white-space:nowrap;" onmouseover="this.style.background='rgba(255,255,255,0.28)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">📤 Upload CSV</button>
+    <button onclick="loadSampleData()" title="Load Sample Data" style="background:rgba(255,255,255,0.15);border:none;color:white;height:34px;padding:0 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background 0.2s;white-space:nowrap;" onmouseover="this.style.background='rgba(255,255,255,0.28)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">📝 Sample Data</button>
+    <button onclick="loadFromSheet()" title="Load from Sheet" style="background:rgba(255,255,255,0.15);border:none;color:white;height:34px;padding:0 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background 0.2s;white-space:nowrap;" onmouseover="this.style.background='rgba(255,255,255,0.28)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">☁️ Load from Sheet</button>
+    <button class="btn-icon" onclick="openSettings()" title="Settings">⚙️</button>
+  </div>
+</header>
+
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<nav class="app-nav">
+  <div class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">📈 Overview</div>
+  <div class="nav-tab" data-tab="reason-tags" onclick="switchTab('reason-tags')">🏷 Reason Tags</div>
+  <div class="nav-tab" data-tab="agent-view" onclick="switchTab('agent-view')">👤 Agent View</div>
+  <div class="nav-tab" data-tab="ai-analysis" onclick="switchTab('ai-analysis')">🤖 AI Analysis</div>
+  <div class="nav-tab" data-tab="sop-reference" onclick="switchTab('sop-reference')">📋 SOP Reference</div>
+  <div class="nav-tab" data-tab="deflection-tests" onclick="switchTab('deflection-tests')">🧪 Deflection Tests</div>
+  <div class="nav-tab" data-tab="sources" onclick="switchTab('sources')">🗂 Sources</div>
+  <div class="nav-tab" data-tab="history" onclick="switchTab('history')">📜 History</div>
+  <div class="nav-tab" data-tab="reports" onclick="switchTab('reports')">✉️ Reports</div>
+</nav>
+
+<main class="app-main">
+
+<!-- ═══════════════════ OVERVIEW TAB ═══════════════════ -->
+<div class="tab-panel active" id="tab-overview">
+  <div class="source-bar">
+    <div class="source-chip"><span class="dot dot-yellow" id="dotCsv"></span> Local data</div>
+    <div class="source-chip"><span class="dot dot-yellow" id="dotSheet"></span> Sheets backend</div>
+    <div class="source-chip"><span class="dot dot-yellow" id="dotGoogle"></span> Google Docs</div>
+    <div class="source-chip"><span class="dot dot-yellow" id="dotGemini"></span> Gemini AI</div>
+  </div>
+
+  <div class="filter-chip-row">
+    <span class="filter-chip-label">Site:</span>
+    <span class="filter-chip active" data-site="ALL" onclick="setSiteFilter('ALL')">RBO + TPO</span>
+    <span class="filter-chip" data-site="RBO" onclick="setSiteFilter('RBO')">RBO only</span>
+    <span class="filter-chip" data-site="TPO" onclick="setSiteFilter('TPO')">TPO only</span>
+    <span class="filter-chip-note">Unified across all contributing teams</span>
+  </div>
+  <div class="filter-chip-row">
+    <span class="filter-chip-label">Currency:</span>
+    <span class="filter-chip currency-chip active" data-cur="USD" onclick="setCurrency('USD')">USD ($)</span>
+    <span class="filter-chip currency-chip" data-cur="AUD" onclick="setCurrency('AUD')">AUD (A$)</span>
+  </div>
+
+  <div id="uploadSection">
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-title">Load Refund Data</div>
+      <div class="upload-zone" id="uploadZone"
+           onclick="document.getElementById('csvFile').click()"
+           ondragover="event.preventDefault(); this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)">
+        <div class="upload-icon">📂</div>
+        <p><strong>Click to upload</strong> a source CSV, or drag &amp; drop it here</p>
+        <p style="margin-top:6px; font-size:12px; color:var(--text-light);">Pick the source from the modal that opens. Data is normalized to: Date, Site, Team, Source, Reason Tag, Amount.</p>
+      </div>
+      <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleFileUpload(event)">
+      <div style="text-align:center; margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="loadSampleData()">📝 Load Sample Data (Demo Mode)</button>
+        <button class="btn btn-outline btn-sm" onclick="loadFromSheet()">☁️ Load from Sheet</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label" id="kpiTotalLabel">Total Refund Value</div>
+      <div class="kpi-value" id="kpiTotal">—</div>
+      <div class="kpi-sub" id="kpiTotalChange">Upload data to begin</div>
+      <div class="kpi-sub" id="kpiTotalCount" style="margin-top:3px;"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" id="kpiPriorLabel">Prior Month Value</div>
+      <div class="kpi-value" id="kpiPrior">—</div>
+      <div class="kpi-sub" id="kpiPriorSub">Like-for-like comparison</div>
+      <div class="kpi-sub" id="kpiPriorCount" style="margin-top:3px;"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">OKR: MoM Reduction</div>
+      <div class="kpi-value" id="kpiOkr">—</div>
+      <div class="okr-bar-wrap"><div class="okr-bar" id="okrBar" style="width:0%"></div></div>
+      <div class="kpi-sub" id="kpiOkrSub">Target: 5% reduction MoM</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" id="kpi12moLabel">Same Month Last Year</div>
+      <div class="kpi-value" id="kpi12moAvg">—</div>
+      <div class="kpi-sub" id="kpi12moSub">Trailing 12-mo monthly average</div>
+    </div>
+  </div>
+
+  <!-- Makegood KPIs — RBO only, hidden until RBO filter active + data loaded -->
+  <div id="makegoodKpiRow" style="display:none;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+    <div class="kpi-card" style="border-left:3px solid var(--primary);">
+      <div class="kpi-label" id="kpiVoucherLabel">Voucher Value · RBO</div>
+      <div class="kpi-value" id="kpiVoucher">—</div>
+      <div class="kpi-sub" id="kpiVoucherCount"></div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid var(--primary-light);">
+      <div class="kpi-label" id="kpiReprintLabel">Reprint Value · RBO</div>
+      <div class="kpi-value" id="kpiReprint">—</div>
+      <div class="kpi-sub" id="kpiReprintCount"></div>
+    </div>
+  </div>
+
+  <div id="aiInsightBanner" class="ai-insight-banner" style="display:none;">
+    <div class="ai-insight-label">🤖 AI Insight (cross-source · auto-generated)</div>
+    <div class="ai-insight-body" id="aiInsightBody">Loading insight...</div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:18px;">
+    <div class="card span-2">
+      <div class="card-title">Refund Volume — Monthly Trend (12 months)</div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Top Reason Tags (MTD)</div>
+      <div class="chart-wrap"><canvas id="overviewTagChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Tag Distribution (MTD)</div>
+      <div class="chart-wrap"><canvas id="overviewPieChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ REASON TAGS TAB ═══════════════════ -->
+<div class="tab-panel" id="tab-reason-tags">
+  <div class="filter-bar">
+    <label>View by:</label>
+    <select id="tagGranularity" onchange="renderReasonTags()">
+      <option value="monthly">Monthly</option>
+      <option value="weekly">Weekly</option>
+      <option value="daily">Daily</option>
+    </select>
+    <label>From:</label>
+    <input type="date" id="tagDateFrom" onchange="renderReasonTags()">
+    <label>To:</label>
+    <input type="date" id="tagDateTo" onchange="renderReasonTags()">
+    <button class="btn btn-ghost btn-sm" onclick="resetTagFilters()">↺ Reset</button>
+      <span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;">
+        <span class="filter-chip-label">Currency:</span>
+        <span class="filter-chip currency-chip active" data-cur="USD" onclick="setCurrency('USD')">USD ($)</span>
+        <span class="filter-chip currency-chip" data-cur="AUD" onclick="setCurrency('AUD')">AUD (A$)</span>
+      </span>
+  </div>
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-title">Refunds by Tag Over Time</div>
+    <div class="chart-wrap tall"><canvas id="tagTrendChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Reason Tag Breakdown</div>
+    <div id="tagTableWrap">
+      <div class="empty-state"><div class="empty-icon">🏷</div><p>Upload data to see reason tag breakdown</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ AGENT VIEW TAB ═══════════════════ -->
+<div class="tab-panel" id="tab-agent-view">
+  <div class="filter-bar">
+    <label>From:</label>
+    <input type="date" id="agentDateFrom" onchange="renderAgentView()">
+    <label>To:</label>
+    <input type="date" id="agentDateTo" onchange="renderAgentView()">
+    <label>Tag:</label>
+    <select id="agentTagFilter" onchange="renderAgentView()"><option value="">All Tags</option></select>
+    <button class="btn btn-ghost btn-sm" onclick="resetAgentFilters()">↺ Reset</button>
+      <span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;">
+        <span class="filter-chip-label">Currency:</span>
+        <span class="filter-chip currency-chip active" data-cur="USD" onclick="setCurrency('USD')">USD ($)</span>
+        <span class="filter-chip currency-chip" data-cur="AUD" onclick="setCurrency('AUD')">AUD (A$)</span>
+      </span>
+  </div>
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-title">Refunds by Agent (Top 10)</div>
+    <div class="chart-wrap"><canvas id="agentChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Agent Detail — <span id="agentSubtitle" style="text-transform:none; font-weight:400;">Flagged agents are above 120% of team average</span></div>
+    <div id="agentTableWrap">
+      <div class="empty-state"><div class="empty-icon">👤</div><p>Upload data to see agent breakdown</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ AI ANALYSIS TAB ═══════════════════ -->
+<div class="tab-panel" id="tab-ai-analysis">
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-title">🤖 Gemini AI Analysis</div>
+    <div class="ai-panel">
+      <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">Quick prompts — click to run instantly:</p>
+      <div class="ai-chips">
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Why are refunds increasing?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Which tags are growing fastest?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Which agents have the most refunds?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Suggest 3 deflection strategies</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">What SOP gaps might be driving refunds?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Write a leadership summary of refund trends</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Which tags are most deflectable?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">How might aggressive deflection affect CSAT?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Cross-reference CS refunds with carrier data</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Where is the variance vs 12-month average?</div>
+        <div class="ai-chip" onclick="runPrompt(this.textContent)">Which sources show conflicting signals?</div>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="aiPromptInput" placeholder="Ask anything about your refund data..." onkeydown="if(event.key==='Enter') runPrompt(document.getElementById('aiPromptInput').value)">
+        <button class="btn btn-primary btn-sm" onclick="runPrompt(document.getElementById('aiPromptInput').value)">Ask ✨</button>
+      </div>
+      <div class="ai-response" id="aiResponse">Configure your Gemini API key in ⚙️ Settings, then ask a question. Your current refund data will be automatically included as context.</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Data Context Sent to AI</div>
+    <pre id="aiContextPreview" style="font-size:12px; color:var(--text-secondary); font-family:'Consolas','Courier New',monospace; background:var(--bg); padding:14px; border-radius:8px; max-height:200px; overflow-y:auto; white-space:pre-wrap;">No data loaded yet.</pre>
+  </div>
+</div>
+
+<!-- ═══════════════════ SOP REFERENCE TAB ═══════════════════ -->
+<div class="tab-panel" id="tab-sop-reference">
+  <div class="filter-chip-row">
+    <span class="filter-chip-label">SOP:</span>
+    <span class="filter-chip active" data-sopsite="TPO" onclick="setActiveSopSite('TPO')">TPO (TeePublic)</span>
+    <span class="filter-chip" data-sopsite="RBO" onclick="setActiveSopSite('RBO')">RBO (Redbubble)</span>
+    <span class="filter-chip-note">AI auto-picks SOP based on the Site filter on Overview</span>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">Connect to SOP Document</div>
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <div style="flex:1; min-width:200px;">
+        <label style="font-size:11px; font-weight:700; color:var(--text-light); display:block; margin-bottom:4px; text-transform:uppercase;">Google Doc ID (<span id="activeSopLabel">TPO</span>)</label>
+        <input type="text" id="sopDocIdInput" placeholder="Paste Doc ID from settings or directly" style="width:100%">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="connectGoogleDocs()">🔗 Connect &amp; Load SOP</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadSampleSOP()">📝 Load Sample SOP</button>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">SOP Content</div>
+      <input type="text" id="sopSearch" placeholder="Search SOP..." style="width:220px;" oninput="searchSOP(this.value)">
+    </div>
+    <div class="sop-content" id="sopContent">
+      <div class="empty-state"><div class="empty-icon">📋</div><p>Connect your TeePublic SOP or load the sample to explore this view.</p></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🤖 Ask AI About the SOP</div>
+    <div class="ai-panel">
+      <div class="ai-chips">
+        <div class="ai-chip" onclick="runSopPrompt(this.textContent)">What does the SOP say about exchange eligibility?</div>
+        <div class="ai-chip" onclick="runSopPrompt(this.textContent)">What SOP policies affect Changed Mind refunds?</div>
+        <div class="ai-chip" onclick="runSopPrompt(this.textContent)">Where does agent discretion create refund risk?</div>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="sopAiInput" placeholder="Ask how the SOP may be influencing refund trends..." onkeydown="if(event.key==='Enter') runSopPrompt(this.value); this.value=''">
+        <button class="btn btn-primary btn-sm" onclick="runSopPrompt(document.getElementById('sopAiInput').value)">Ask ✨</button>
+      </div>
+      <div class="ai-response" id="sopAiResponse">Load the SOP document first, then ask a question.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ DEFLECTION TESTS TAB ═══════════════════ -->
+<div class="tab-panel" id="tab-deflection-tests">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <div>
+      <div style="font-size:19px; font-weight:800; color:var(--text);">Deflection Test Tracker</div>
+      <div style="font-size:13px; color:var(--text-secondary); margin-top:3px;">Measure refund volumes before and after CS interventions. Requires loaded CSV data.</div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addTestModal')">➕ New Test</button>
+  </div>
+  <div id="testsContainer">
+    <div class="empty-state"><div class="empty-icon">🧪</div><p>No deflection tests yet. Create one to measure the impact of your refund reduction interventions.</p></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SOURCES TAB (V3) ═══════════════════ -->
+<div class="tab-panel" id="tab-sources">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <div>
+      <div style="font-size:19px; font-weight:800; color:var(--text);">🗂 Source Registry</div>
+      <div style="font-size:13px; color:var(--text-secondary); margin-top:3px;">~30 sources logged with their contributing team. Users see unified data, but provenance is preserved for AI cross-referencing and audit.</div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addSourceModal')">➕ Add source</button>
+  </div>
+  <div class="card">
+    <div id="sourcesTableWrap">
+      <div class="empty-state"><div class="empty-icon">🗂</div><p>No sources registered yet. Click "Add source" or load Sample Data to populate.</p></div>
+    </div>
+    <div class="source-summary-bar" id="sourcesSummary" style="display:none;">
+      <span><strong id="srcCountFresh" class="freshness-fresh">0 fresh</strong> <span style="color:var(--text-light);">(&lt; 24h)</span></span>
+      <span><strong id="srcCountStale" class="freshness-stale">0 stale</strong> <span style="color:var(--text-light);">(&gt; 24h)</span></span>
+      <span><strong id="srcCountMissing" class="freshness-missing">0 missing</strong> <span style="color:var(--text-light);">(this month)</span></span>
+      <span style="color:var(--text-secondary); margin-left:auto;" id="srcTeamBreakdown">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ HISTORY TAB (V3) ═══════════════════ -->
+<div class="tab-panel" id="tab-history">
+  <div style="margin-bottom:16px;">
+    <div style="font-size:19px; font-weight:800; color:var(--text);">📜 Historical Comparison</div>
+    <div style="font-size:13px; color:var(--text-secondary); margin-top:3px;">Compare any two months side-by-side, with 12-month average for context. Defaults to like-for-like (Day 1 through current day-of-month).</div>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="history-controls">
+      <div class="history-control-group">
+        <span class="filter-chip-label">Compare:</span>
+        <select id="histPeriodA" onchange="renderHistory()" style="font-size:13px;"></select>
+        <span style="font-size:12px; color:var(--text-secondary);">vs</span>
+        <select id="histPeriodB" onchange="renderHistory()" style="font-size:13px;"></select>
+      </div>
+      <div class="filter-chip-row" style="margin-top:6px;">
+    <span class="filter-chip-label">Currency:</span>
+    <span class="filter-chip currency-chip active" data-cur="USD" onclick="setCurrency('USD')">USD ($)</span>
+    <span class="filter-chip currency-chip" data-cur="AUD" onclick="setCurrency('AUD')">AUD (A$)</span>
+  </div>
+      <div class="history-control-group">
+        <span class="filter-chip-label">View:</span>
+        <span class="filter-chip active" data-histview="like" onclick="setHistView('like')">Like-for-like</span>
+        <span class="filter-chip" data-histview="full" onclick="setHistView('full')">Full month</span>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Tag-level comparison</div>
+    <div id="historyTableWrap">
+      <div class="empty-state"><div class="empty-icon">📜</div><p>Load data to see historical comparison.</p></div>
+    </div>
+    <div id="historyAlerts" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ REPORTS TAB (V3) ═══════════════════ -->
+<div class="tab-panel" id="tab-reports">
+  <div style="margin-bottom:16px;">
+    <div style="font-size:19px; font-weight:800; color:var(--text);">✉️ Email Reports</div>
+    <div style="font-size:13px; color:var(--text-secondary); margin-top:3px;">Generate AI-written summaries. Copy as HTML or send via Gmail. Scheduled sends are Phase 2.</div>
+  </div>
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="card">
+      <div class="card-title">Template</div>
+      <div class="template-card selected" data-template="mbr" onclick="selectTemplate('mbr')">📊 Monthly business review (MBR)</div>
+      <div class="template-card" data-template="weekly" onclick="selectTemplate('weekly')">📈 Weekly trend update</div>
+      <div class="template-card" data-template="anomaly" onclick="selectTemplate('anomaly')">⚠️ Anomaly alert</div>
+      <div class="template-card" data-template="test" onclick="selectTemplate('test')">🧪 Deflection test result</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Scope &amp; recipients</div>
+      <div class="form-group">
+        <label>Site</label>
+        <select id="reportSite" style="width:100%;">
+          <option value="ALL">RBO + TPO</option>
+          <option value="RBO">RBO only</option>
+          <option value="TPO">TPO only</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Recipient(s)</label>
+        <input type="text" id="reportTo" placeholder="leadership@teepublic.com, ops@teepublic.com">
+      </div>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="reportSubject" placeholder="Auto-generated from template">
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">Preview</div>
+      <button class="btn btn-outline btn-sm" onclick="generateReport()">✨ Generate</button>
+    </div>
+    <div class="email-preview" id="emailPreview">
+      Click "Generate" to draft a report. The AI will pull current refund data and historical baselines, then write a leadership-ready summary.
+    </div>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <button class="btn btn-primary btn-sm" onclick="copyReportAsHtml()">📋 Copy as HTML</button>
+    <button class="btn btn-outline btn-sm" onclick="sendViaGmail()">✉️ Send via Gmail</button>
+    <button class="btn btn-ghost btn-sm" onclick="generateReport()">↻ Regenerate</button>
+    <button class="btn btn-disabled btn-sm" disabled title="Available in Phase 2">⏰ Schedule (Phase 2)</button>
+  </div>
+</div>
+
+<!-- Add-source modal (referenced by Sources tab) -->
+<div class="modal-overlay" id="addSourceModal">
+  <div class="modal">
+    <div class="modal-title">➕ Add source</div>
+    <div class="form-group">
+      <label>Source name</label>
+      <input type="text" id="srcName" placeholder="e.g. Reship tickets (Sigma)">
+    </div>
+    <div class="form-group">
+      <label>Contributing team</label>
+      <select id="srcTeam" style="width:100%;">
+        <option value="CS">Customer Service</option>
+        <option value="Supply Chain">Supply Chain</option>
+        <option value="Logistics">Logistics</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Site</label>
+      <select id="srcSite" style="width:100%;">
+        <option value="RBO">RBO</option>
+        <option value="TPO">TPO</option>
+        <option value="ALL">RBO + TPO</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Method</label>
+      <select id="srcMethod" style="width:100%;">
+        <option value="csv-upload">CSV upload</option>
+        <option value="api-auto">API (auto)</option>
+        <option value="paste-html">Paste from clipboard</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Cadence</label>
+      <select id="srcCadence" style="width:100%;">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Confidentiality level</label>
+      <select id="srcConfLevel" style="width:100%;">
+        <option value="2">Level 2 — Confidential (default)</option>
+        <option value="3">Level 3 — Contains PII</option>
+      </select>
+      <div class="form-hint">⚠️ Level 3 sources are excluded from external reports by default.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveSource()">Save source</button>
+      <button class="btn btn-ghost" onclick="closeModal('addSourceModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings password modal -->
+<div class="modal-overlay" id="settingsPasswordModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-title">🔒 Settings Access</div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">Enter the settings password to continue.</p>
+    <div class="form-group">
+      <input type="password" id="settingsPwInput" placeholder="Password"
+        style="width:100%;"
+        onkeydown="if(event.key==='Enter') checkSettingsPassword(this.value)">
+      <div id="settingsPwError" style="display:none;color:#DC2626;font-size:12px;margin-top:6px;">
+        Incorrect password. Try again.
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="checkSettingsPassword(document.getElementById('settingsPwInput').value)">Unlock</button>
+      <button class="btn btn-ghost" onclick="closeModal('settingsPasswordModal'); document.getElementById('settingsPwInput').value=''; document.getElementById('settingsPwError').style.display='none';">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload type modal -->
+<div class="modal-overlay" id="uploadTypeModal">
+  <div class="modal">
+    <div class="modal-title">📂 What type of file is this?</div>
+    <div id="uploadStepIndicator" style="font-size:11px;color:var(--text-secondary);margin-bottom:14px;">Step 1 of 2</div>
+
+    <!-- Step 1: file type + currency -->
+    <div id="uploadStep1">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">Select the data type so the hub knows how to parse it.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <label id="typeRefundLabel" style="display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border:1.5px solid var(--primary);border-radius:8px;cursor:pointer;">
+          <input type="radio" name="uploadType" value="refund" checked style="margin-top:2px;" onchange="selectUploadType(this)">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Refund Data</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Standard refund export from Sigma or Zendesk</div>
+          </div>
+        </label>
+        <label id="typeMakegoodLabel" style="display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;">
+          <input type="radio" name="uploadType" value="makegood" style="margin-top:2px;" onchange="selectUploadType(this)">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Makegoods Report <span style="background:var(--primary-xlight);color:var(--primary-dark);font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;vertical-align:middle;margin-left:4px;">RBO only</span></div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Voucher and reprint data from the interim makegoods report</div>
+          </div>
+        </label>
+      </div>
+      <div id="sourceCurrencyRow" style="margin-bottom:18px;">
+        <hr style="border:none;border-top:1px solid var(--border);margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">SOURCE CURRENCY</div>
+        <div style="display:flex;gap:18px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input type="radio" name="sourceCurrency" value="USD" checked> USD (default)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input type="radio" name="sourceCurrency" value="AUD"> AUD — converts to USD on load
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: source metadata — refund uploads only -->
+    <div id="uploadStep2" style="display:none;">
+      <div class="form-group">
+        <label>Source name</label>
+        <input type="text" id="uploadSrcName" placeholder="e.g. CX Refunds (Sigma)">
+      </div>
+      <div class="form-group">
+        <label>Site</label>
+        <select id="uploadSrcSite" style="width:100%;">
+          <option value="RBO">RBO</option>
+          <option value="TPO">TPO</option>
+          <option value="ALL">RBO + TPO</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Contributing team</label>
+        <select id="uploadSrcTeam" style="width:100%;">
+          <option value="CS">Customer Service</option>
+          <option value="Supply Chain">Supply Chain</option>
+          <option value="Logistics">Logistics</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Confidentiality level</label>
+        <select id="uploadSrcConfLevel" style="width:100%;">
+          <option value="2">Level 2 — Confidential (default)</option>
+          <option value="3">Level 3 — Contains PII</option>
+        </select>
+        <div class="form-hint">⚠️ Level 3 sources are excluded from external reports by default.</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="uploadModalPrimaryBtn" onclick="confirmUploadType()">Continue →</button>
+      <button class="btn btn-outline" onclick="closeModal('uploadTypeModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ════════════════════════════════════════════════════════
+// SITE CONFIG — non-sensitive defaults, pre-populated for all users
+// ⚠️ Do NOT put API keys or tokens here — this file is shared
+// ════════════════════════════════════════════════════════
+const SITE_CONFIG = {
+  sheetId:             '',          // Level 2 — paste your Master Sheet ID
+  googleClientId:      '',          // paste your OAuth Client ID
+  okrTarget:           5,           // MoM refund reduction OKR (%)
+  userEmail:           '',          // your work email
+  sopDocIdTpo:         '',          // TPO SOP Google Doc ID
+  sopDocIdRbo:         '',          // RBO SOP Google Doc ID
+  zdSubdomain:         'teepublic', // TPO Zendesk subdomain
+  zdSubdomainRbo:      'redbubble', // RBO Zendesk subdomain
+  zdEmail:             '',          // TPO Zendesk agent email
+  zdEmailRbo:          '',          // RBO Zendesk agent email
+  settingsPasswordHash: '',         // SHA-256 hash of your settings password — generate via console (see build checklist)
+};
+
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+const STATE = {
+  refunds: [],
+  sopTextTpo: '',
+  sopTextRbo: '',
+  tests: JSON.parse(sessionStorage.getItem('rih_tests') || '[]'),
+  settings: { ...SITE_CONFIG, ...JSON.parse(localStorage.getItem('rih_settings') || '{}') },
+  charts: {},
+  // V3 additions
+  sources: JSON.parse(sessionStorage.getItem('rih_sources') || '[]'),
+  siteFilter: 'ALL',           // 'ALL' | 'RBO' | 'TPO'
+  histView: 'like',            // 'like' | 'full'
+  histPeriodA: null,
+  histPeriodB: null,
+  selectedTemplate: 'mbr',
+  generatedReportHtml: '',
+  googleAccessToken: null,
+  aiInsightCache: null,
+  activeSopSite: 'TPO',        // which SOP is being viewed/edited in the SOP Reference tab
+  currency: 'USD',             // 'USD' | 'AUD'
+  usdToAudRate: null,          // locked at ingestion time, null until first data load
+  makegoodData: [],            // RBO makegood rows (vouchers + reprints), separate from refunds
+  _pendingCSVText: null        // holds raw CSV text while upload-type modal is open
+};
+
+// ════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); }));
+
+function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
+function set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+// ════════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════════
+function openSettings() {
+  if (SITE_CONFIG.settingsPasswordHash) {
+    // Reset prompt state each time
+    document.getElementById('settingsPwInput').value = '';
+    document.getElementById('settingsPwError').style.display = 'none';
+    openModal('settingsPasswordModal');
+  } else {
+    // No password configured — open freely
+    openModal('settingsModal');
+  }
+}
+
+async function checkSettingsPassword(entered) {
+  if (!entered) return;
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(entered));
+  const hashHex = Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  if (hashHex === SITE_CONFIG.settingsPasswordHash) {
+    closeModal('settingsPasswordModal');
+    document.getElementById('settingsPwInput').value = '';
+    document.getElementById('settingsPwError').style.display = 'none';
+    openModal('settingsModal');
+  } else {
+    document.getElementById('settingsPwError').style.display = 'block';
+    document.getElementById('settingsPwInput').value = '';
+    document.getElementById('settingsPwInput').focus();
+  }
+}
+
+function saveSettings() {
+  const s = {
+    zdSubdomain: v('zdSubdomain'), zdEmail: v('zdEmail'), zdToken: v('zdToken'),
+    zdSubdomainRbo: v('zdSubdomainRbo'), zdEmailRbo: v('zdEmailRbo'), zdTokenRbo: v('zdTokenRbo'),
+    geminiKey: v('geminiKey'), googleClientId: v('googleClientId'),
+    sopDocIdTpo: v('sopDocIdTpo'),
+    sopDocIdRbo: v('sopDocIdRbo'),
+    sheetId: v('sheetId'),
+    userEmail: v('userEmail'),
+    okrTarget: parseFloat(v('okrTarget')) || 5
+  };
+  STATE.settings = s;
+  sessionStorage.setItem('rih_settings', JSON.stringify(s));
+  // Pre-fill the SOP Reference tab Doc ID field based on currently active site
+  const sopIdInput = document.getElementById('sopDocIdInput');
+  if (sopIdInput) {
+    sopIdInput.value = STATE.activeSopSite === 'RBO' ? (s.sopDocIdRbo || '') : (s.sopDocIdTpo || '');
+  }
+  updateDots();
+  closeModal('settingsModal');
+  toast('Settings saved for this session ✓');
+}
+
+function loadSettingsUI() {
+  const s = STATE.settings;
+  const m = (id, val) => { if (val) document.getElementById(id).value = val; };
+  m('zdSubdomain', s.zdSubdomain); m('zdEmail', s.zdEmail); m('zdToken', s.zdToken);
+  m('zdSubdomainRbo', s.zdSubdomainRbo); m('zdEmailRbo', s.zdEmailRbo); m('zdTokenRbo', s.zdTokenRbo);
+  m('geminiKey', s.geminiKey); m('googleClientId', s.googleClientId);
+  m('sopDocIdTpo', s.sopDocIdTpo); m('sopDocIdRbo', s.sopDocIdRbo);
+  // Pre-fill the SOP Reference tab Doc ID field based on active site
+  const activeId = STATE.activeSopSite === 'RBO' ? s.sopDocIdRbo : s.sopDocIdTpo;
+  m('sopDocIdInput', activeId);
+  m('sheetId', s.sheetId); m('userEmail', s.userEmail);
+  if (s.okrTarget) document.getElementById('okrTarget').value = s.okrTarget;
+}
+
+function updateDots() {
+  setDot('dotCsv', STATE.refunds.length > 0);
+  setDot('dotSheet', !!STATE.settings.sheetId && !!STATE.googleAccessToken);
+  setDot('dotGoogle', !!(STATE.sopTextTpo || STATE.sopTextRbo));
+  setDot('dotGemini', !!STATE.settings.geminiKey);
+}
+function setDot(id, on) { document.getElementById(id).className = 'dot ' + (on ? 'dot-green' : 'dot-yellow'); }
+
+// ════════════════════════════════════════════════════════
+// TAB NAV
+// ════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+  const map = {
+    'reason-tags': renderReasonTags,
+    'agent-view': renderAgentView,
+    'ai-analysis': updateAiContext,
+    'deflection-tests': renderTests,
+    'sources': renderSources,
+    'history': renderHistory,
+    'reports': () => {}
+  };
+  if (map[name]) map[name]();
+}
+
+// ════════════════════════════════════════════════════════
+// CSV PARSING
+// ════════════════════════════════════════════════════════
+function handleFileUpload(e) { const f = e.target.files[0]; if (f) readCSV(f); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0]; if (f) readCSV(f);
+}
+function readCSV(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    STATE._pendingCSVText = ev.target.result;
+    // Reset to default selection and open type picker
+    const refundRadio = document.querySelector('input[name="uploadType"][value="refund"]');
+    if (refundRadio) { refundRadio.checked = true; selectUploadType(refundRadio); }
+    openModal('uploadTypeModal');
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text, sourceIsAUD = false, meta = {}) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) { toast('CSV appears empty.', true); return; }
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
+  const col = (...names) => { for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i >= 0) return i; } return -1; };
+  const iDate = col('date'); const iAgent = col('agent'); const iTag = col('reason', 'tag');
+  const iAmt = col('amount', 'refund'); const iTicket = col('ticket'); const iOrder = col('order');
+  const iSite = col('site'); const iTeam = col('team'); const iSource = col('source');
+  // Meta overrides: use modal values first, then fall back to CSV column, then hard default
+  const metaSite   = meta.site       || null;
+  const metaTeam   = meta.team       || null;
+  const metaSource = meta.sourceName || null;
+  const refunds = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitLine(lines[i]);
+    const c = idx => (cols[idx] || '').toString().trim().replace(/"/g, '');
+    const ds = iDate >= 0 ? c(iDate) : '';
+    if (!ds) continue;
+    const d = new Date(ds);
+    if (isNaN(d)) continue;
+    const rawAmt = iAmt >= 0 ? parseFloat(c(iAmt).replace(/[$,]/g, '')) || 0 : 0;
+    refunds.push({
+      date: d, dateStr: ds.substring(0, 10),
+      agent: iAgent >= 0 ? c(iAgent) || 'Unknown' : 'Unknown',
+      tag: iTag >= 0 ? c(iTag) || 'Untagged' : 'Untagged',
+      amount: sourceIsAUD ? 0 : rawAmt,
+      nativeAmtAUD: sourceIsAUD ? rawAmt : undefined,
+      sourceCurrency: sourceIsAUD ? 'AUD' : 'USD',
+      ticketId: iTicket >= 0 ? c(iTicket) : '',
+      orderId: iOrder >= 0 ? c(iOrder) : '',
+      site:   metaSite   || (iSite   >= 0 ? c(iSite)   || 'RBO' : 'RBO'),
+      team:   metaTeam   || (iTeam   >= 0 ? c(iTeam)   || 'CS'  : 'CS'),
+      source: metaSource || (iSource >= 0 ? c(iSource) || 'CX Refunds (Sigma)' : 'CX Refunds (Sigma)'),
+      confLevel: meta.confLevel || 2
+    });
+  }
+  if (!refunds.length) { toast('No valid rows found. Check column names.', true); return; }
+  const siteLabel = metaSite ? ` · ${metaSite}` : '';
+  loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded${siteLabel}`);
+}
+
+function splitLine(line) {
+  const cols = []; let cur = '', inQ = false;
+  for (const ch of line) { if (ch === '"') inQ = !inQ; else if (ch === ',' && !inQ) { cols.push(cur); cur = ''; } else cur += ch; }
+  cols.push(cur); return cols;
+}
+
+// Upload-type modal handlers
+function selectUploadType(radio) {
+  document.getElementById('typeRefundLabel').style.borderColor   = radio.value === 'refund'   ? 'var(--primary)' : 'var(--border)';
+  document.getElementById('typeMakegoodLabel').style.borderColor = radio.value === 'makegood' ? 'var(--primary)' : 'var(--border)';
+  document.getElementById('sourceCurrencyRow').style.display = radio.value === 'refund' ? 'block' : 'none';
+}
+
+function confirmUploadType() {
+  const type = document.querySelector('input[name="uploadType"]:checked')?.value;
+  if (type === 'makegood') {
+    // Makegoods: no metadata step needed — site/currency are fixed
+    closeModal('uploadTypeModal');
+    const text = STATE._pendingCSVText;
+    STATE._pendingCSVText = null;
+    if (text) parseMakegoodCSV(text);
+  } else {
+    // Refund: advance to step 2 for source metadata
+    document.getElementById('uploadStep1').style.display = 'none';
+    document.getElementById('uploadStep2').style.display = 'block';
+    document.getElementById('uploadStepIndicator').textContent = 'Step 2 of 2';
+    document.getElementById('uploadModalPrimaryBtn').textContent = 'Upload ↑';
+    document.getElementById('uploadModalPrimaryBtn').setAttribute('onclick', 'confirmUploadMeta()');
+    // Store currency selection before step 1 is hidden
+    STATE._pendingCurrencyIsAUD = document.querySelector('input[name="sourceCurrency"]:checked')?.value === 'AUD';
+  }
+}
+
+function confirmUploadMeta() {
+  const sourceName = document.getElementById('uploadSrcName').value.trim() || 'CX Refunds (Sigma)';
+  const site       = document.getElementById('uploadSrcSite').value;
+  const team       = document.getElementById('uploadSrcTeam').value;
+  const confLevel  = parseInt(document.getElementById('uploadSrcConfLevel').value) || 2;
+  const sourceIsAUD = STATE._pendingCurrencyIsAUD || false;
+  closeModal('uploadTypeModal');
+  // Reset modal back to step 1 for next use
+  document.getElementById('uploadStep1').style.display = 'block';
+  document.getElementById('uploadStep2').style.display = 'none';
+  document.getElementById('uploadStepIndicator').textContent = 'Step 1 of 2';
+  document.getElementById('uploadModalPrimaryBtn').textContent = 'Continue →';
+  document.getElementById('uploadModalPrimaryBtn').setAttribute('onclick', 'confirmUploadType()');
+  STATE._pendingCurrencyIsAUD = false;
+  const text = STATE._pendingCSVText;
+  STATE._pendingCSVText = null;
+  if (!text) return;
+  parseCSV(text, sourceIsAUD, { sourceName, site, team, confLevel });
+}
+
+// Makegood CSV parser (voucher + reprint rows from the interim makegoods report)
+function parseMakegoodCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) { toast('CSV appears empty.', true); return; }
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
+  const col = (...names) => { for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i >= 0) return i; } return -1; };
+  const iVDate = col('voucher date');
+  const iVAmt  = col('fractional voucher amount');
+  const iRDate = col('reprint date');
+  const iRAmt  = col('fractional reprint amount');
+  const iTicket = col('zendesk ticket');
+  const iAgent  = col('assignee name');
+  const iOrder  = col('purchase order');
+  const iLine   = col('lineitemid');
+  const iReason = col('zendesk reason');
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitLine(lines[i]);
+    const c = idx => (cols[idx] || '').toString().trim().replace(/"/g, '');
+    const vAmt = iVAmt >= 0 ? parseFloat(c(iVAmt)) || 0 : 0;
+    const rAmt = iRAmt >= 0 ? parseFloat(c(iRAmt)) || 0 : 0;
+    if (!vAmt && !rAmt) continue;   // skip rows with no voucher or reprint value
+    const vDateRaw = iVDate >= 0 ? c(iVDate) : '';
+    const rDateRaw = iRDate >= 0 ? c(iRDate) : '';
+    const vDate = vDateRaw ? new Date(vDateRaw) : null;
+    const rDate = rDateRaw ? new Date(rDateRaw) : null;
+    rows.push({
+      lineItemId:    iLine   >= 0 ? c(iLine)   : '',
+      orderId:       iOrder  >= 0 ? c(iOrder)  : '',
+      ticketId:      iTicket >= 0 ? c(iTicket) : '',
+      agent:         iAgent  >= 0 ? c(iAgent)  : 'Unknown',
+      reason:        iReason >= 0 ? c(iReason) : '',
+      site:          'RBO',
+      voucherDate:    vDate,
+      voucherDateStr: vDate && !isNaN(vDate) ? vDateRaw.substring(0, 10) : '',
+      voucherAmtAUD:  vAmt,
+      reprintDate:    rDate,
+      reprintDateStr: rDate && !isNaN(rDate) ? rDateRaw.substring(0, 10) : '',
+      reprintAmtAUD:  rAmt
+    });
+  }
+  if (!rows.length) { toast('No rows with voucher or reprint values found.', true); return; }
+  STATE.makegoodData = rows;
+  if (!STATE.usdToAudRate) fetchExchangeRate();
+  toast(`✓ ${rows.length.toLocaleString()} makegood rows loaded (RBO)`);
+  renderOverview();
+}
+
+// Currency formatter for amounts that are natively in AUD (makegoods)
+function formatCurrencyFromAUD(amtAUD) {
+  const n = Number(amtAUD) || 0;
+  if (STATE.currency === 'AUD') {
+    return 'A$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  const rate = STATE.usdToAudRate || 1.55;   // fallback matches fetchExchangeRate fallback
+  return '$' + (n / rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function loadData(refunds, statusMsg) {
+  // Remove any existing rows from the same source+site so re-uploading a
+  // source refreshes it cleanly rather than duplicating rows
+  const newSource = refunds[0]?.source;
+  const newSite   = refunds[0]?.site;
+  if (newSource && newSite) {
+    STATE.refunds = STATE.refunds.filter(r => !(r.source === newSource && r.site === newSite));
+  }
+  STATE.refunds = [...STATE.refunds, ...refunds];
+
+  // Only reset the exchange rate if we don't have one yet — subsequent uploads
+  // should reuse the rate already locked from the first upload
+  if (!STATE.usdToAudRate) STATE.usdToAudRate = null;
+
+  const total = STATE.refunds.length;
+  const sourceCount = new Set(STATE.refunds.map(r => r.source + '|' + r.site)).size;
+  document.getElementById('dataStatus').textContent =
+    `${total.toLocaleString()} refunds loaded · ${sourceCount} source${sourceCount !== 1 ? 's' : ''}`;
+  document.getElementById('uploadSection').style.display = 'none';
+  populateTagFilter();
+  setDefaultDates();
+  renderOverview();
+  updateDots();
+  toast(`✓ ${statusMsg}`);
+  if (!STATE.usdToAudRate) fetchExchangeRate();
+}
+
+// ════════════════════════════════════════════════════════
+// SAMPLE DATA
+// ════════════════════════════════════════════════════════
+function loadSampleData() {
+  // V3: generate 12 months of multi-team, multi-site, multi-source data
+  const SOURCES = [
+    { name: 'CX Refunds (Sigma)', team: 'CS', tags: ['CX Satisfaction - Free Returns','Edit Req. - Changed Mind','Quality Issue - Product Defect','Edit Req. - Wrong Size'], weights: [0.40, 0.30, 0.20, 0.10], avgAmt: 22 },
+    { name: 'Zendesk tickets',     team: 'CS', tags: ['Refund - General','Refund - Escalation'], weights: [0.7, 0.3], avgAmt: 18 },
+    { name: 'Reship tickets (Sigma)', team: 'Supply Chain', tags: ['Quality - Print Error','Quality - Defect','Quality - Wrong Item'], weights: [0.5, 0.3, 0.2], avgAmt: 15 },
+    { name: 'Production defect log', team: 'Supply Chain', tags: ['Defect - Print','Defect - Material'], weights: [0.6, 0.4], avgAmt: 12 },
+    { name: 'SKU-level defect rate', team: 'Supply Chain', tags: ['SKU - High defect','SKU - Watch'], weights: [0.4, 0.6], avgAmt: 10 },
+    { name: 'Carrier tracking (Shippo)', team: 'Logistics', tags: ['Shipping - Lost Package','Shipping - Late Arrival','Shipping - Damaged'], weights: [0.4, 0.4, 0.2], avgAmt: 25 },
+    { name: 'Lost package claims', team: 'Logistics', tags: ['Carrier Lost - UPS','Carrier Lost - USPS'], weights: [0.5, 0.5], avgAmt: 28 },
+    { name: 'Late delivery refunds', team: 'Logistics', tags: ['Late - Domestic','Late - International'], weights: [0.7, 0.3], avgAmt: 20 }
+  ];
+  const AGENTS = ['Jordan M.','Casey T.','Riley S.','Morgan P.','Alex K.','Sam L.','Quinn R.','Taylor B.'];
+  const SITES = ['RBO','TPO'];
+
+  const refunds = [];
+  const now = new Date();
+  // 12 months back
+  for (let d = 365; d >= 0; d--) {
+    const dt = new Date(now); dt.setDate(dt.getDate() - d);
+    if (dt.getDay() === 0 || dt.getDay() === 6) continue;
+    SOURCES.forEach(src => {
+      SITES.forEach(site => {
+        const baseCount = src.team === 'CS' ? 3 : src.team === 'Supply Chain' ? 1 : 1;
+        const count = Math.floor(Math.random() * baseCount) + 1;
+        for (let i = 0; i < count; i++) {
+          // pick a tag by weight
+          let r = Math.random(), cum = 0, tag = src.tags[0];
+          for (let t = 0; t < src.weights.length; t++) { cum += src.weights[t]; if (r < cum) { tag = src.tags[t]; break; } }
+          // recent uptick for 'Lost Package' at RBO (for the AI insight to find)
+          if (tag === 'Shipping - Lost Package' && site === 'RBO' && d < 14 && Math.random() < 0.5) {
+            // duplicate to create the spike
+            const ds = dt.toISOString().split('T')[0];
+            refunds.push({ date: new Date(dt), dateStr: ds, agent: AGENTS[Math.floor(Math.random()*AGENTS.length)], tag, amount: src.avgAmt + Math.random()*8, ticketId: String(Math.floor(Math.random()*90000+10000)), orderId: 'ORD-'+Math.floor(Math.random()*900000+100000), site, team: src.team, source: src.name });
+          }
+          const ds = dt.toISOString().split('T')[0];
+          refunds.push({
+            date: new Date(dt), dateStr: ds,
+            agent: AGENTS[Math.floor(Math.random()*AGENTS.length)],
+            tag,
+            amount: Math.round((src.avgAmt + (Math.random()*16-8)) * 100) / 100,
+            ticketId: String(Math.floor(Math.random()*90000+10000)),
+            orderId: 'ORD-'+Math.floor(Math.random()*900000+100000),
+            site, team: src.team, source: src.name
+          });
+        }
+      });
+    });
+  }
+  // Seed sources registry from the sample
+  STATE.sources = SOURCES.flatMap(src => SITES.map(site => ({
+    source_id: `${src.name.toLowerCase().replace(/[^a-z]+/g,'-')}-${site.toLowerCase()}`,
+    source_name: src.name,
+    team: src.team,
+    site,
+    method: src.team === 'Logistics' && src.name.includes('Carrier') ? 'api-auto' : src.team === 'CS' && src.name.includes('Zendesk') ? 'api-auto' : 'csv-upload',
+    cadence: 'weekly',
+    last_refreshed_at: new Date(Date.now() - Math.random()*60*60*1000).toISOString(),
+    owner_email: 'sloane@teepublic.com',
+    confidentiality_level: 2
+  })));
+  sessionStorage.setItem('rih_sources', JSON.stringify(STATE.sources));
+  loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded (demo · 12mo · 3 teams · 2 sites)`);
+}
+
+// ════════════════════════════════════════════════════════
+// DATA HELPERS
+// ════════════════════════════════════════════════════════
+const curMonth = () => {
+  const n = new Date();
+  return STATE.refunds.filter(r => r.date.getFullYear() === n.getFullYear() && r.date.getMonth() === n.getMonth());
+};
+
+// LIKE-FOR-LIKE prior month: same calendar window (day 1 through today's day-of-month)
+const priorMonthSameDays = () => {
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const priorRef = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  return STATE.refunds.filter(r =>
+    r.date.getFullYear() === priorRef.getFullYear() &&
+    r.date.getMonth() === priorRef.getMonth() &&
+    r.date.getDate() <= dayOfMonth
+  );
+};
+
+// FULL prior month — last complete calendar month
+const priorMonthFull = () => {
+  const n = new Date();
+  const p = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+  return STATE.refunds.filter(r => r.date.getFullYear() === p.getFullYear() && r.date.getMonth() === p.getMonth());
+};
+
+// FULL two months ago — comparison baseline for OKR
+const twoMonthsAgoFull = () => {
+  const n = new Date();
+  const p = new Date(n.getFullYear(), n.getMonth() - 2, 1);
+  return STATE.refunds.filter(r => r.date.getFullYear() === p.getFullYear() && r.date.getMonth() === p.getMonth());
+};
+
+// FULL same month last year — YoY baseline
+const sameMonthLastYearFull = () => {
+  const n = new Date();
+  const p = new Date(n.getFullYear() - 1, n.getMonth() - 1, 1);
+  return STATE.refunds.filter(r => r.date.getFullYear() === p.getFullYear() && r.date.getMonth() === p.getMonth());
+};
+
+const filterDates = (arr, from, to) => arr.filter(r => (!from || r.dateStr >= from) && (!to || r.dateStr <= to));
+const byTag = arr => { const m = {}; arr.forEach(r => m[r.tag] = (m[r.tag]||0)+1); return Object.entries(m).sort((a,b) => b[1]-a[1]); };
+const byAgent = arr => { const m = {}; arr.forEach(r => { if(!m[r.agent]) m[r.agent]={total:0,tags:{},amount:0}; m[r.agent].total++; m[r.agent].tags[r.tag]=(m[r.agent].tags[r.tag]||0)+1; m[r.agent].amount+=r.amount; }); return Object.entries(m).sort((a,b)=>b[1].total-a[1].total); };
+const groupMonth = arr => { const m={}; arr.forEach(r=>{const k=r.dateStr.substring(0,7); m[k]=(m[k]||0)+1;}); return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])); };
+const groupWeek = arr => { const m={}; arr.forEach(r=>{const d=new Date(r.date); d.setDate(d.getDate()-d.getDay()); const k=d.toISOString().split('T')[0]; m[k]=(m[k]||0)+1;}); return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])); };
+const groupDay = arr => { const m={}; arr.forEach(r=>{m[r.dateStr]=(m[r.dateStr]||0)+1;}); return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])); };
+const PALETTE = ['#A03877','#C45A99','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#84CC16','#F97316'];
+
+// Currency formatting
+function formatCurrency(amount) {
+  const n = Number(amount) || 0;
+  const converted = STATE.currency === 'AUD' && STATE.usdToAudRate
+    ? n * STATE.usdToAudRate
+    : n;
+  const formatted = converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return STATE.currency === 'AUD' ? 'A$' + formatted : '$' + formatted;
+}
+
+const sumAmount = arr => arr.reduce((s, r) => s + (r.amount || 0), 0);
+const groupMonthAmt = arr => { const m={}; arr.forEach(r=>{const k=r.dateStr.substring(0,7); m[k]=(m[k]||0)+(r.amount||0);}); return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])); };
+const byTagAmt = arr => { const m={}; arr.forEach(r=>{ if(!m[r.tag]) m[r.tag]={count:0,amount:0}; m[r.tag].count++; m[r.tag].amount+=(r.amount||0); }); return Object.entries(m).sort((a,b)=>b[1].amount-a[1].amount); };
+const trailing12MonthAvgAmt = () => {
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear()-1, today.getMonth(), 1);
+  const monthlyTotals = {};
+  applySiteFilter(STATE.refunds)
+    .filter(r => r.date >= cutoff && r.date < new Date(today.getFullYear(), today.getMonth(), 1))
+    .forEach(r => { const k=r.dateStr.substring(0,7); monthlyTotals[k]=(monthlyTotals[k]||0)+(r.amount||0); });
+  const months = Object.values(monthlyTotals);
+  return months.length ? months.reduce((a,b)=>a+b,0)/months.length : 0;
+};
+
+function makeChart(id, config) {
+  if(STATE.charts[id]) STATE.charts[id].destroy();
+  const ctx=document.getElementById(id);
+  if(!ctx) return;
+  STATE.charts[id]=new Chart(ctx,config);
+}
+
+function setDefaultDates() {
+  const dates = STATE.refunds.map(r => r.dateStr).sort();
+  if (!dates.length) return;
+  ['tagDateFrom','agentDateFrom'].forEach(id => document.getElementById(id).value = dates[0]);
+  ['tagDateTo','agentDateTo'].forEach(id => document.getElementById(id).value = dates[dates.length-1]);
+}
+
+function populateTagFilter() {
+  const tags = [...new Set(STATE.refunds.map(r => r.tag))].sort();
+  const sel = document.getElementById('agentTagFilter');
+  sel.innerHTML = '<option value="">All Tags</option>' + tags.map(t => `<option>${escapeHtml(t)}</option>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — SITE FILTER + HISTORICAL BASELINES + SOURCE ROLLUP
+// ════════════════════════════════════════════════════════
+
+// Apply site filter to any refunds array (returns filtered subset)
+const applySiteFilter = arr => {
+  if (STATE.siteFilter === 'ALL') return arr;
+  return arr.filter(r => r.site === STATE.siteFilter);
+};
+
+// V3: filtered current month (respects site filter)
+const curMonthFiltered = () => applySiteFilter(curMonth());
+
+// V3: same window 12 months ago (year-over-year baseline)
+const sameWindowLastYear = () => {
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const ref = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+  return applySiteFilter(STATE.refunds.filter(r =>
+    r.date.getFullYear() === ref.getFullYear() &&
+    r.date.getMonth() === ref.getMonth() &&
+    r.date.getDate() <= dayOfMonth
+  ));
+};
+
+// V3: trailing 12-month average monthly count
+const trailing12MonthAvg = () => {
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+  const monthlyTotals = {};
+  applySiteFilter(STATE.refunds)
+    .filter(r => r.date >= cutoff && r.date < new Date(today.getFullYear(), today.getMonth(), 1))
+    .forEach(r => {
+      const k = r.dateStr.substring(0, 7);
+      monthlyTotals[k] = (monthlyTotals[k] || 0) + 1;
+    });
+  const months = Object.values(monthlyTotals);
+  return months.length ? Math.round(months.reduce((a, b) => a + b, 0) / months.length) : 0;
+};
+
+// V3: roll up refunds by source for AI cross-referencing
+const bySource = arr => {
+  const m = {};
+  arr.forEach(r => {
+    const key = r.source || 'Unknown';
+    if (!m[key]) m[key] = { count: 0, team: r.team, tags: {} };
+    m[key].count++;
+    m[key].tags[r.tag] = (m[key].tags[r.tag] || 0) + 1;
+  });
+  return Object.entries(m).sort((a,b) => b[1].count - a[1].count);
+};
+
+// V3: site filter chip handler
+function setCurrency(cur) {
+  STATE.currency = cur;
+  document.querySelectorAll('.currency-chip').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('[id^="cur"]').forEach(b => {
+    if (b.classList.contains('currency-chip')) b.classList.remove('active');
+  });
+  document.querySelectorAll('.currency-chip[data-cur="' + cur + '"]').forEach(b => b.classList.add('active'));
+  const activeTab = document.querySelector('.tab-panel.active')?.id?.replace('tab-', '');
+  if (activeTab === 'overview') renderOverview();
+  if (activeTab === 'reason-tags') renderReasonTags();
+  if (activeTab === 'agent-view') renderAgentView();
+  if (activeTab === 'history') renderHistory();
+}
+
+function setSiteFilter(site) {
+  STATE.siteFilter = site;
+  document.querySelectorAll('.filter-chip[data-site]').forEach(c => {
+    c.classList.toggle('active', c.dataset.site === site);
+  });
+  renderOverview();
+  // re-render whichever tab is active
+  const activeTab = document.querySelector('.nav-tab.active')?.dataset.tab;
+  if (activeTab === 'reason-tags') renderReasonTags();
+  if (activeTab === 'agent-view') renderAgentView();
+  if (activeTab === 'history') renderHistory();
+}
+
+// ════════════════════════════════════════════════════════
+// OVERVIEW
+// ════════════════════════════════════════════════════════
+function renderOverview() {
+  const all = applySiteFilter(STATE.refunds);
+  if (!all.length) return;
+  const okrT = STATE.settings.okrTarget || 5;
+
+  // Month reference points
+  const today = new Date();
+  const lastMoDate   = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const twoMoDate    = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+  const lastYrMoDate = new Date(today.getFullYear() - 1, today.getMonth() - 1, 1);
+  const fmtMo = d => d.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const lastMoLabel   = fmtMo(lastMoDate);    // e.g. "April 2026"
+  const twoMoLabel    = fmtMo(twoMoDate);     // e.g. "March 2026"
+  const lastYrMoLabel = fmtMo(lastYrMoDate);  // e.g. "April 2025"
+
+  // Data sets — all full calendar months
+  const lastMo   = applySiteFilter(priorMonthFull());
+  const twoMoAgo = applySiteFilter(twoMonthsAgoFull());
+  const lastYrMo = applySiteFilter(sameMonthLastYearFull());
+
+  // Update KPI card labels with month names
+  set('kpiTotalLabel', `Total Refund Value (${lastMoLabel})`);
+  set('kpiPriorLabel', `Total Refund Value (${twoMoLabel})`);
+  set('kpi12moLabel',  `Total Refund Value (${lastYrMoLabel})`);
+
+  // KPI amounts
+  const lastMoAmt   = sumAmount(lastMo);
+  const twoMoAmt    = sumAmount(twoMoAgo);
+  const lastYrMoAmt = sumAmount(lastYrMo);
+
+  set('kpiTotal', formatCurrency(lastMoAmt));
+  set('kpiPrior', formatCurrency(twoMoAmt));
+  set('kpiTotalCount', `${lastMo.length.toLocaleString()} refunds`);
+  set('kpiPriorCount', `${twoMoAgo.length.toLocaleString()} refunds · full month`);
+
+  // MoM change on card 1: last month vs two months ago
+  const mom = twoMoAmt ? ((lastMoAmt - twoMoAmt) / twoMoAmt * 100) : 0;
+  const momStr = (mom > 0 ? '▲ +' : mom < 0 ? '▼ ' : '') + Math.abs(mom).toFixed(1) + `% vs ${twoMoLabel}`;
+  document.getElementById('kpiTotalChange').innerHTML = `<span class="${mom > 0 ? 'change-up' : 'change-down'}">${momStr}</span>`;
+  set('kpiPriorSub', `Full month comparison`);
+
+  // OKR: reduction from two months ago → last month (both full months)
+  const reduction = twoMoAmt ? ((twoMoAmt - lastMoAmt) / twoMoAmt * 100) : 0;
+  const pct = twoMoAgo.length
+    ? Math.max(3, Math.min(100, (Math.abs(reduction) / okrT) * 100))
+    : 3;
+  const okrLabel = reduction > 0
+    ? reduction.toFixed(1) + '% reduction'
+    : reduction < 0
+    ? '▲ ' + Math.abs(reduction).toFixed(1) + '% increase'
+    : '0.0% (no change)';
+  set('kpiOkr', okrLabel);
+  const bar = document.getElementById('okrBar');
+  bar.style.width = pct + '%';
+  bar.className = 'okr-bar ' + (reduction >= okrT ? 'on-track' : 'off-track');
+  set('kpiOkrSub', `${twoMoLabel} → ${lastMoLabel} | Target: ${okrT}% | ${reduction >= okrT ? '✓ On Track' : '✗ Off Track'}`);
+
+  // YoY KPI: same month last year (full)
+  set('kpi12moAvg', formatCurrency(lastYrMoAmt));
+  if (lastYrMoAmt) {
+    const vsYoY = ((lastMoAmt - lastYrMoAmt) / lastYrMoAmt * 100);
+    const vsYoYStr = (vsYoY > 0 ? '▲ +' : vsYoY < 0 ? '▼ ' : '') + Math.abs(vsYoY).toFixed(1) + '% (' + (vsYoY < 0 ? 'better' : 'worse') + ')';
+    document.getElementById('kpi12moSub').innerHTML = `vs ${lastMoLabel}: <span class="${vsYoY > 0 ? 'change-up' : 'change-down'}">${vsYoYStr}</span>`;
+  }
+
+  // Trend chart — 12 months (amount-based)
+  const monthly = groupMonthAmt(all);
+  makeChart('trendChart', { type: 'line', data: {
+    labels: monthly.map(([k]) => { const [y,m] = k.split('-'); return new Date(y, m-1).toLocaleString('default',{month:'short',year:'2-digit'}); }),
+    datasets: [{ label: 'Refund Value', data: monthly.map(([,v])=>v), borderColor: '#A03877', backgroundColor: 'rgba(160,56,119,0.07)', fill: true, tension: 0.4, pointBackgroundColor: '#A03877', pointRadius: 4, pointHoverRadius: 6 }]
+  }, options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,grid:{color:'rgba(232,221,240,0.6)'},ticks:{callback:v=>STATE.currency==='AUD'?'A$'+v.toLocaleString():'$'+v.toLocaleString()}},x:{grid:{display:false}}} }});
+
+  // Tag bar (amount-based) — uses last month data
+  const tags = byTagAmt(lastMo);
+  const top5 = tags.slice(0, 5);
+  makeChart('overviewTagChart', { type: 'bar', data: {
+    labels: top5.map(([t]) => t.length>22 ? t.substring(0,22)+'…' : t),
+    datasets: [{ data: top5.map(([,d])=>d.amount), backgroundColor: PALETTE.slice(0,5), borderRadius: 6, borderSkipped: false }]
+  }, options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{grid:{display:false}},x:{beginAtZero:true,grid:{color:'rgba(232,221,240,0.6)'},ticks:{callback:v=>STATE.currency==='AUD'?'A$'+v.toLocaleString():'$'+v.toLocaleString()}}} }});
+
+  // Pie (amount-based)
+  makeChart('overviewPieChart', { type: 'doughnut', data: {
+    labels: top5.map(([t]) => t.length>28 ? t.substring(0,28)+'…' : t),
+    datasets: [{ data: top5.map(([,d])=>d.amount), backgroundColor: PALETTE.slice(0,5), borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }]
+  }, options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}}} }});
+
+  // V3: trigger AI insight (debounced, async)
+  if (STATE.settings.geminiKey) {
+    generateAiInsight();
+  }
+
+  // Makegood KPIs — show only when site filter is RBO and makegood data is loaded
+  const mgRow = document.getElementById('makegoodKpiRow');
+  if (STATE.siteFilter === 'RBO') {
+    set('kpiVoucherLabel', `Voucher Value (${lastMoLabel}) · RBO`);
+    set('kpiReprintLabel', `Reprint Value (${lastMoLabel}) · RBO`);
+    if (STATE.makegoodData.length) {
+      const prevMoVouchers = STATE.makegoodData.filter(r => r.voucherDate && !isNaN(r.voucherDate)
+        && r.voucherDate.getFullYear() === lastMoDate.getFullYear()
+        && r.voucherDate.getMonth() === lastMoDate.getMonth());
+      const prevMoReprints = STATE.makegoodData.filter(r => r.reprintDate && !isNaN(r.reprintDate)
+        && r.reprintDate.getFullYear() === lastMoDate.getFullYear()
+        && r.reprintDate.getMonth() === lastMoDate.getMonth());
+      const vTotal = prevMoVouchers.reduce((s, r) => s + r.voucherAmtAUD, 0);
+      const rTotal = prevMoReprints.reduce((s, r) => s + r.reprintAmtAUD, 0);
+      set('kpiVoucher',      formatCurrencyFromAUD(vTotal));
+      set('kpiVoucherCount', `${prevMoVouchers.length.toLocaleString()} voucher${prevMoVouchers.length !== 1 ? 's' : ''} issued`);
+      set('kpiReprint',      formatCurrencyFromAUD(rTotal));
+      set('kpiReprintCount', `${prevMoReprints.length.toLocaleString()} reprint${prevMoReprints.length !== 1 ? 's' : ''} issued`);
+    } else {
+      set('kpiVoucher',      '—');
+      set('kpiVoucherCount', 'Upload makegoods report to populate');
+      set('kpiReprint',      '—');
+      set('kpiReprintCount', 'Upload makegoods report to populate');
+    }
+    mgRow.style.display = 'grid';
+  } else {
+    mgRow.style.display = 'none';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// REASON TAGS
+// ════════════════════════════════════════════════════════
+function renderReasonTags() {
+  if (!STATE.refunds.length) return;
+  const g = document.getElementById('tagGranularity').value;
+  const from = v('tagDateFrom'); const to = v('tagDateTo');
+  const filtered = filterDates(STATE.refunds, from, to);
+  const tags = byTag(filtered);
+  const curr = curMonth(), priorWindow = priorMonthSameDays();
+  const top6 = tags.slice(0, 6).map(([t]) => t);
+
+  let groups;
+  if (g === 'monthly') groups = groupMonth(filtered);
+  else if (g === 'weekly') groups = groupWeek(filtered);
+  else groups = groupDay(filtered);
+
+  const labels = groups.map(([k]) => {
+    if (g === 'monthly') { const [y,m] = k.split('-'); return new Date(y,m-1).toLocaleString('default',{month:'short',year:'2-digit'}); }
+    return k.substring(5);
+  });
+
+  const datasets = top6.map((tag, i) => ({
+    label: tag.length > 28 ? tag.substring(0, 28) + '…' : tag,
+    data: groups.map(([period]) => filtered.filter(r => r.tag === tag && matchPeriod(r, period, g)).length),
+    backgroundColor: PALETTE[i] + 'CC', borderColor: PALETTE[i], borderWidth: 1
+  }));
+
+  makeChart('tagTrendChart', { type: 'bar', data: { labels, datasets },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12}}}, scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,grid:{color:'rgba(232,221,240,0.6)'}}} }});
+
+  const totalAmt = sumAmount(filtered);
+  const tagData = byTagAmt(filtered);
+  let html = '<table class="data-table"><thead><tr><th>Reason Tag</th><th>Value (Selected Range)</th><th>Count</th><th>% of Total Value</th><th>MTD Value</th><th>Prior Mo. (Same Days)</th><th>MoM Change</th></tr></thead><tbody>';
+  tagData.forEach(([tag, d]) => {
+    const mtdRows = curr.filter(r => r.tag === tag);
+    const pmRows = priorWindow.filter(r => r.tag === tag);
+    const mtdAmt = sumAmount(mtdRows);
+    const pmAmt = sumAmount(pmRows);
+    const ch = pmAmt ? ((mtdAmt - pmAmt) / pmAmt * 100).toFixed(1) : null;
+    const cls = ch === null ? '' : parseFloat(ch) > 0 ? 'change-up' : 'change-down';
+    const str = ch === null ? '—' : (parseFloat(ch) > 0 ? '▲ +' : '▼ ') + Math.abs(ch) + '%';
+    html += `<tr><td><span class="tag-pill">${escapeHtml(tag)}</span></td><td>${formatCurrency(d.amount)}</td><td style="color:var(--text-secondary);">${d.count}</td><td>${totalAmt ? (d.amount/totalAmt*100).toFixed(1) : '0.0'}%</td><td>${formatCurrency(mtdAmt)}</td><td>${formatCurrency(pmAmt)}</td><td class="${cls}">${str}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('tagTableWrap').innerHTML = html;
+}
+
+function matchPeriod(r, period, g) {
+  if (g === 'monthly') return r.dateStr.substring(0,7) === period;
+  if (g === 'weekly') { const d = new Date(r.date); d.setDate(d.getDate()-d.getDay()); return d.toISOString().split('T')[0] === period; }
+  return r.dateStr === period;
+}
+
+function resetTagFilters() { setDefaultDates(); renderReasonTags(); }
+
+// ════════════════════════════════════════════════════════
+// AGENT VIEW
+// ════════════════════════════════════════════════════════
+function renderAgentView() {
+  if (!STATE.refunds.length) return;
+  const from = v('agentDateFrom'); const to = v('agentDateTo');
+  const tag = document.getElementById('agentTagFilter').value;
+  let filtered = filterDates(STATE.refunds, from, to);
+  if (tag) filtered = filtered.filter(r => r.tag === tag);
+  if (!filtered.length) { document.getElementById('agentTableWrap').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No data in selected range.</p></div>'; return; }
+
+  const agents = byAgent(filtered);
+  const avgAmt = sumAmount(filtered) / agents.length;
+  const avg = filtered.length / agents.length;
+  const top10 = agents.slice(0, 10);
+
+  makeChart('agentChart', { type: 'bar', data: {
+    labels: top10.map(([a]) => a),
+    datasets: [{ label: 'Refund Value', data: top10.map(([,d]) => d.amount), backgroundColor: top10.map(([,d]) => d.amount > avgAmt * 1.2 ? '#DC262699' : '#A0387799'), borderRadius: 6 }]
+  }, options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,grid:{color:'rgba(232,221,240,0.6)'},ticks:{callback:v=>STATE.currency==='AUD'?'A$'+v.toLocaleString():'$'+v.toLocaleString()}},x:{grid:{display:false}}} }});
+
+  let html = '<table class="data-table"><thead><tr><th>Agent</th><th>Total Refund Value</th><th>Refund Count</th><th>Top Tag</th><th>vs Team Avg (Value)</th><th>Avg per Refund</th></tr></thead><tbody>';
+  agents.forEach(([agent, data]) => {
+    const topTag = Object.entries(data.tags).sort((a,b)=>b[1]-a[1])[0];
+    const vsAmt = avgAmt ? ((data.amount - avgAmt) / avgAmt * 100).toFixed(0) : 0;
+    const cls = parseFloat(vsAmt) > 20 ? 'change-up' : parseFloat(vsAmt) < -20 ? 'change-down' : '';
+    const perRefund = data.total ? data.amount / data.total : 0;
+    const flagCls = parseFloat(vsAmt) > 20 ? 'flag-high' : '';
+    html += `<tr class="${flagCls}"><td><strong>${escapeHtml(agent)}</strong></td><td>${formatCurrency(data.amount)}</td><td style="color:var(--text-secondary);">${data.total}</td><td><span class="tag-pill">${escapeHtml(topTag ? topTag[0].substring(0,28) : '—')}</span></td><td class="${cls}">${parseFloat(vsAmt)>0?'+':''}${vsAmt}%</td><td>${formatCurrency(perRefund)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('agentTableWrap').innerHTML = html;
+}
+
+function resetAgentFilters() {
+  setDefaultDates();
+  document.getElementById('agentTagFilter').value = '';
+  renderAgentView();
+}
+
+// ════════════════════════════════════════════════════════
+// AI ANALYSIS
+// ════════════════════════════════════════════════════════
+function buildContext() {
+  if (!STATE.refunds.length) return 'No data loaded.';
+  const curr = curMonthFiltered();
+  const priorWindow = applySiteFilter(priorMonthSameDays());
+  const priorFull = applySiteFilter(priorMonthFull());
+  const yoyWindow = sameWindowLastYear();
+  const avg12 = trailing12MonthAvg();
+  const tags = byTag(curr);
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const red = priorWindow.length ? ((priorWindow.length - curr.length) / priorWindow.length * 100).toFixed(1) : 'N/A';
+  const okrT = STATE.settings.okrTarget || 5;
+  const sources = bySource(curr);
+  const sites = STATE.siteFilter === 'ALL' ? 'RBO + TPO' : STATE.siteFilter;
+  const sopStatus = getSopContextForAi();
+
+  return `REFUND INTELLIGENCE HUB — DATA CONTEXT
+Sites in scope: ${sites}
+OKR Target: ${okrT}% monthly reduction
+Comparison method: like-for-like (Day 1 through Day ${dayOfMonth} of each month)
+
+═══ HEADLINE NUMBERS ═══
+Current Month MTD (Day ${dayOfMonth}): ${curr.length} refunds
+Prior Month, same days (1-${dayOfMonth}): ${priorWindow.length}
+Prior Month, full month (reference): ${priorFull.length}
+Same window 12 months ago: ${yoyWindow.length}
+Trailing 12-month avg (monthly): ${avg12}
+MoM Reduction (like-for-like): ${red}% (${parseFloat(red) >= okrT ? 'ON TRACK ✓' : 'OFF TRACK ✗'})
+Total refunds in dataset: ${STATE.refunds.length}
+
+═══ TOP TAGS THIS MONTH (auto-detected) ═══
+${tags.slice(0,7).map(([t,c])=>`  ${t}: ${c} (${(c/Math.max(curr.length,1)*100).toFixed(1)}%)`).join('\n')}
+
+═══ SOURCES CONTRIBUTING THIS MONTH ═══
+${sources.slice(0,10).map(([name, info])=>{
+  const topTag = Object.entries(info.tags).sort((a,b)=>b[1]-a[1])[0];
+  return `  ${name} [${info.team}]: ${info.count} refunds${topTag ? ` (top tag: ${topTag[0]})` : ''}`;
+}).join('\n')}
+
+═══ NOTABLE CROSS-SOURCE PATTERNS TO CHECK ═══
+When responding, look for these correlations and CITE THE SOURCE NAMES explicitly in your answer:
+- CS source refund counts vs. Logistics source carrier-issue counts (e.g. lost packages)
+- Supply Chain reship counts vs. CS print-error refunds (deflection signal)
+- 12-month variance: any tag where MTD differs >15% from 12-mo avg
+
+${sopStatus.label}`;
+}
+
+// V3: pick which SOP(s) to send to the AI based on the Site filter
+// RBO filter → RBO SOP only. TPO filter → TPO SOP only. ALL → both, clearly labeled.
+function getSopContextForAi() {
+  const tpo = STATE.sopTextTpo || '';
+  const rbo = STATE.sopTextRbo || '';
+  const filter = STATE.siteFilter;
+
+  if (filter === 'RBO') {
+    return {
+      label: rbo ? 'SOP CONTENT: RBO (Redbubble) SOP loaded — auto-selected for RBO site filter\n' : 'SOP CONTENT: Not loaded for RBO\n',
+      text: rbo ? `\n\nRBO SOP EXCERPT:\n${rbo.substring(0, 4000)}` : ''
+    };
+  }
+  if (filter === 'TPO') {
+    return {
+      label: tpo ? 'SOP CONTENT: TPO (TeePublic) SOP loaded — auto-selected for TPO site filter\n' : 'SOP CONTENT: Not loaded for TPO\n',
+      text: tpo ? `\n\nTPO SOP EXCERPT:\n${tpo.substring(0, 4000)}` : ''
+    };
+  }
+  // ALL: include whichever SOPs are loaded, clearly labeled
+  const parts = [];
+  if (tpo) parts.push(`TPO (TeePublic) SOP EXCERPT:\n${tpo.substring(0, 2500)}`);
+  if (rbo) parts.push(`RBO (Redbubble) SOP EXCERPT:\n${rbo.substring(0, 2500)}`);
+  if (!parts.length) return { label: 'SOP CONTENT: Not loaded\n', text: '' };
+  return {
+    label: `SOP CONTENT: Both site SOPs loaded (${tpo ? 'TPO' : ''}${tpo && rbo ? ' + ' : ''}${rbo ? 'RBO' : ''}) — site filter is ALL, so both are included for cross-site comparison\n`,
+    text: '\n\n' + parts.join('\n\n---\n\n')
+  };
+}
+
+// V3: Generate AI insight banner content (auto, on data load)
+async function generateAiInsight() {
+  const banner = document.getElementById('aiInsightBanner');
+  const body = document.getElementById('aiInsightBody');
+  if (!STATE.settings.geminiKey) return;
+
+  // Cache by site filter to avoid spamming the API on tab switches
+  const cacheKey = STATE.siteFilter + '_' + new Date().toDateString();
+  if (STATE.aiInsightCache && STATE.aiInsightCache.key === cacheKey) {
+    banner.style.display = 'block';
+    body.innerHTML = STATE.aiInsightCache.html;
+    return;
+  }
+
+  banner.style.display = 'block';
+  body.innerHTML = '<em style="color:var(--text-light);">Generating cross-source insight...</em>';
+  try {
+    const ctx = buildContext();
+    const prompt = `${ctx}
+
+Write a single 2-3 paragraph insight for the Overview banner. Requirements:
+1. Lead with whether refunds are tracking better/worse vs. prior month and 12-mo average.
+2. Identify ONE notable cross-source pattern this month — name the specific source(s) you reference (e.g. "Carrier tracking (Shippo)" or "Reship tickets (Sigma)").
+3. End with a one-sentence recommended action.
+
+Use plain HTML formatting. Wrap source names in <span style="background:white;border:1px solid #E8DDF0;padding:1px 6px;border-radius:10px;font-size:11px;">Source name</span>. Keep it concise — under 120 words.`;
+    const html = await callGemini(prompt);
+    STATE.aiInsightCache = { key: cacheKey, html };
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<em style="color:var(--text-light);">Could not generate insight: ' + e.message + '</em>';
+  }
+}
+
+function updateAiContext() {
+  document.getElementById('aiContextPreview').textContent = buildContext();
+}
+
+async function callGemini(prompt) {
+  const key = STATE.settings.geminiKey;
+  if (!key) return '⚠️ Configure your Gemini API key in ⚙️ Settings first.';
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${key}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.25, maxOutputTokens: 900 } })
+  });
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received. Check your API key.';
+}
+
+async function runPrompt(prompt) {
+  if (!prompt) return;
+  document.getElementById('aiPromptInput').value = '';
+  const el = document.getElementById('aiResponse');
+  el.textContent = '✨ Analyzing your data...'; el.className = 'ai-response ai-loading';
+  try {
+    const sopCtx = getSopContextForAi();
+    const ctx = buildContext() + sopCtx.text;
+    const full = `You are a Customer Service Operations analyst. Here is the current data context:\n\n${ctx}\n\nQuestion: ${prompt}\n\nProvide specific, actionable insights. Reference actual numbers from the data. Where relevant, tie findings back to the team's MoM reduction OKR and the broader company priorities of cost containment AND CSAT preservation.`;
+    el.textContent = await callGemini(full);
+  } catch (e) { el.textContent = '⚠️ Error: ' + e.message; }
+  el.className = 'ai-response';
+}
+
+async function runSopPrompt(prompt) {
+  if (!prompt) return;
+  document.getElementById('sopAiInput').value = '';
+  const el = document.getElementById('sopAiResponse');
+  // Auto-pick SOP based on the current site filter
+  const sopCtx = getSopContextForAi();
+  if (!sopCtx.text) {
+    el.textContent = `⚠️ Load the ${STATE.siteFilter === 'ALL' ? 'TPO or RBO' : STATE.siteFilter} SOP first (or change the Site filter on Overview).`;
+    return;
+  }
+  el.textContent = '✨ Analyzing SOP...'; el.className = 'ai-response ai-loading';
+  try {
+    const full = `You are a CS Ops analyst cross-referencing SOP content with refund trends.\n${sopCtx.label}${sopCtx.text}\n\nRefund Context:\n${buildContext()}\n\nQuestion: ${prompt}\n\nBe specific, cite the SOP where relevant, and flag any policy gaps. If both TPO and RBO SOPs are loaded, note any meaningful differences between them.`;
+    el.textContent = await callGemini(full);
+  } catch (e) { el.textContent = '⚠️ Error: ' + e.message; }
+  el.className = 'ai-response';
+}
+
+// ════════════════════════════════════════════════════════
+// GOOGLE DOCS / SOP
+// ════════════════════════════════════════════════════════
+function connectGoogleDocs() {
+  const clientId = STATE.settings.googleClientId;
+  const docId = document.getElementById('sopDocIdInput').value
+    || (STATE.activeSopSite === 'RBO' ? STATE.settings.sopDocIdRbo : STATE.settings.sopDocIdTpo);
+  if (!clientId) { toast('⚠️ Add your Google Client ID in Settings first.', true); return; }
+  if (!docId) { toast('⚠️ Enter a Doc ID.', true); return; }
+  if (typeof google === 'undefined' || !google.accounts) { toast('⚠️ Run via a local server (python -m http.server 8000) for Google Auth.', true); return; }
+  google.accounts.oauth2.initTokenClient({
+    client_id: clientId, scope: 'https://www.googleapis.com/auth/documents.readonly',
+    callback: async (resp) => {
+      if (!resp.access_token) { toast('⚠️ Auth failed.', true); return; }
+      try {
+        const res = await fetch(`https://docs.googleapis.com/v1/documents/${docId}`, { headers: { Authorization: 'Bearer ' + resp.access_token } });
+        const doc = await res.json();
+        let text = '';
+        (doc.body?.content || []).forEach(el => { if (el.paragraph) el.paragraph.elements?.forEach(pe => { if (pe.textRun?.content) text += pe.textRun.content; }); });
+        // V3: route into the correct site slot
+        if (STATE.activeSopSite === 'RBO') STATE.sopTextRbo = text;
+        else STATE.sopTextTpo = text;
+        updateDots(); renderSOP(text); toast(`✓ ${STATE.activeSopSite} SOP loaded from Google Docs`);
+      } catch (e) { toast('⚠️ Failed: ' + e.message, true); }
+    }
+  }).requestAccessToken();
+}
+
+function renderSOP(text) {
+  let html = '';
+  text.split('\n').forEach(line => {
+    const t = line.trim();
+    const safe = escapeHtml(t);
+    if (!t) { html += '<br>'; return; }
+    if (t === t.toUpperCase() && t.length > 4 && t.length < 80) html += `<h2>${safe}</h2>`;
+    else if (t.match(/^[A-Z][a-z].*:$/)) html += `<h3>${safe}</h3>`;
+    else html += `<p>${safe}</p>`;
+  });
+  document.getElementById('sopContent').innerHTML = html;
+}
+
+function searchSOP(q) {
+  const activeText = STATE.activeSopSite === 'RBO' ? STATE.sopTextRbo : STATE.sopTextTpo;
+  if (!activeText) return;
+  if (!q) { renderSOP(activeText); return; }
+  const safeText = escapeHtml(activeText);
+  const safeQ = escapeHtml(q);
+  const re = new RegExp(safeQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const hl = safeText.replace(re, m => `<mark>${m}</mark>`);
+  document.getElementById('sopContent').innerHTML = hl.split('\n').map(l => `<p>${l}</p>`).join('');
+}
+
+function loadSampleSOP() {
+  const sample = `${STATE.activeSopSite === 'RBO' ? 'REDBUBBLE' : 'TEEPUBLIC'} CUSTOMER SERVICE — STANDARD OPERATING PROCEDURES
+
+RETURNS & EXCHANGES
+
+Return Eligibility
+Products are eligible for a full refund within 45 days of delivery if defective, damaged, or not as described. Orders beyond 45 days are assessed case by case at agent discretion.
+
+CX Satisfaction - Free Returns
+Agents may approve free returns for customers expressing dissatisfaction even if the product is not defective. This policy applies to orders within 90 days of delivery. Before approving a free return, agents must first offer an exchange with a $5 courtesy coupon. If the customer declines the exchange offer, agents may proceed with the free return. All free returns must be tagged in Zendesk using the CX Satisfaction - Free Returns tag.
+
+Edit Req. - Changed Mind Process
+When a customer requests a refund due to changing their mind after purchase:
+1. Acknowledge the customer's request
+2. Offer a store credit or exchange as a first alternative
+3. If the customer declines, offer the $5 coupon for an exchange
+4. If all alternatives are declined, process the refund and tag as Edit Req. - Changed Mind
+5. Document the deflection attempt in the ticket notes
+
+Escalation Policy
+Refunds exceeding $75, or customers with more than 3 refunds in 12 months, must be escalated to a team lead before processing.
+
+SHIPPING ISSUES
+
+Lost Package Claims
+For packages marked as delivered but not received, agents should advise the customer to wait 3 business days before filing a claim. After 3 days, agents may file a claim directly with the carrier and offer a reship or refund.`;
+  // V3: route into correct site slot
+  if (STATE.activeSopSite === 'RBO') STATE.sopTextRbo = sample;
+  else STATE.sopTextTpo = sample;
+  updateDots(); renderSOP(sample); toast(`✓ Sample ${STATE.activeSopSite} SOP loaded`);
+}
+
+// V3: switch which SOP is active in the SOP Reference tab
+function setActiveSopSite(site) {
+  STATE.activeSopSite = site;
+  document.querySelectorAll('.filter-chip[data-sopsite]').forEach(c => {
+    c.classList.toggle('active', c.dataset.sopsite === site);
+  });
+  document.getElementById('activeSopLabel').textContent = site;
+  // Re-fill the Doc ID input from settings for whichever site is now active
+  const docId = site === 'RBO' ? STATE.settings.sopDocIdRbo : STATE.settings.sopDocIdTpo;
+  const docInput = document.getElementById('sopDocIdInput');
+  if (docInput) docInput.value = docId || '';
+  // Render whichever SOP is loaded for the active site, or empty state
+  const text = site === 'RBO' ? STATE.sopTextRbo : STATE.sopTextTpo;
+  if (text) renderSOP(text);
+  else document.getElementById('sopContent').innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No ' + site + ' SOP loaded yet. Connect via Google Docs or load the sample.</p></div>';
+  // Reset search box
+  const searchEl = document.getElementById('sopSearch');
+  if (searchEl) searchEl.value = '';
+}
+
+// ════════════════════════════════════════════════════════
+// DEFLECTION TESTS
+// ════════════════════════════════════════════════════════
+function saveTest() {
+  const nm = v('testName');
+  if (!nm) { toast('⚠️ Test name is required.', true); return; }
+  const t = {
+    id: Date.now(), name: nm, hypothesis: v('testHypothesis'), tag: v('testTag'),
+    periodAStart: v('testPeriodAStart'), periodAEnd: v('testPeriodAEnd'),
+    periodBStart: v('testPeriodBStart'), periodBEnd: v('testPeriodBEnd')
+  };
+  STATE.tests.push(t);
+  sessionStorage.setItem('rih_tests', JSON.stringify(STATE.tests));
+  ['testName','testHypothesis','testTag','testPeriodAStart','testPeriodAEnd','testPeriodBStart','testPeriodBEnd'].forEach(id => document.getElementById(id).value = '');
+  closeModal('addTestModal');
+  renderTests(); toast('✓ Test added');
+}
+
+function deleteTest(id) {
+  if (!confirm('Remove this test?')) return;
+  STATE.tests = STATE.tests.filter(t => t.id !== id);
+  sessionStorage.setItem('rih_tests', JSON.stringify(STATE.tests));
+  renderTests();
+}
+
+function getTestCounts(test) {
+  const r = STATE.refunds;
+  const filt = (start, end) => (test.tag ? r.filter(x => x.tag === test.tag) : r).filter(x => x.dateStr >= start && x.dateStr <= end);
+  return { a: filt(test.periodAStart, test.periodAEnd), b: filt(test.periodBStart, test.periodBEnd) };
+}
+
+function renderTests() {
+  const c = document.getElementById('testsContainer');
+  if (!STATE.tests.length) { c.innerHTML = '<div class="empty-state"><div class="empty-icon">🧪</div><p>No deflection tests yet.</p></div>'; return; }
+  const today = new Date().toISOString().split('T')[0];
+  c.innerHTML = STATE.tests.map(t => {
+    const {a, b} = getTestCounts(t);
+    const ch = a.length ? ((b.length - a.length) / a.length * 100).toFixed(1) : null;
+    const isActive = t.periodBEnd >= today;
+    const chColor = ch !== null && parseFloat(ch) < 0 ? 'var(--success)' : ch !== null && parseFloat(ch) > 0 ? 'var(--danger)' : 'var(--text)';
+    const chStr = ch !== null ? (parseFloat(ch)>0?'▲ +':'▼ ') + Math.abs(ch) + '%' : '—';
+    return `<div class="test-card">
+      <div class="test-card-header">
+        <div><div class="test-name">${escapeHtml(t.name)}</div>${t.hypothesis ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:3px;">📝 ${escapeHtml(t.hypothesis)}</div>` : ''}</div>
+        <span class="test-status ${isActive ? 'status-active' : 'status-done'}">${isActive ? '● Active' : '✓ Complete'}</span>
+      </div>
+      ${t.tag ? `<div style="margin-bottom:10px;"><span class="tag-pill">🏷 ${escapeHtml(t.tag)}</span></div>` : ''}
+      <div class="grid-3" style="margin-bottom:12px;">
+        <div class="stat-box"><div class="stat-box-label">Baseline<br>${t.periodAStart||'—'} – ${t.periodAEnd||'—'}</div><div class="stat-box-value" style="color:var(--text)">${a.length}</div></div>
+        <div class="stat-box"><div class="stat-box-label">Test Period<br>${t.periodBStart||'—'} – ${t.periodBEnd||'—'}</div><div class="stat-box-value" style="color:var(--text)">${b.length}</div></div>
+        <div class="stat-box" style="border: 1.5px solid ${ch !== null && parseFloat(ch) < 0 ? 'var(--success)' : 'var(--border)'}"><div class="stat-box-label">Change</div><div class="stat-box-value" style="color:${chColor}">${chStr}</div></div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="analyzeTest(${t.id})">🤖 AI Analysis</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTest(${t.id})">🗑 Remove</button>
+      </div>
+      <div class="ai-response" id="testAi-${t.id}" style="display:none; margin-top:12px;"></div>
+    </div>`;
+  }).join('');
+}
+
+async function analyzeTest(id) {
+  const test = STATE.tests.find(t => t.id === id);
+  const el = document.getElementById(`testAi-${id}`);
+  el.style.display = 'block'; el.textContent = '✨ Analyzing...'; el.className = 'ai-response ai-loading';
+  const {a, b} = getTestCounts(test);
+  const ch = a.length ? ((b.length - a.length) / a.length * 100).toFixed(1) : 'N/A';
+  const today = new Date().toISOString().split('T')[0];
+  const isPreliminary = test.periodBEnd >= today;
+  const prompt = `Analyze this deflection test for the TeePublic CS team:
+Name: ${test.name}
+Hypothesis: ${test.hypothesis || 'N/A'}
+Focused Tag: ${test.tag || 'All refunds'}
+Baseline (${test.periodAStart}–${test.periodAEnd}): ${a.length} refunds
+Test Period (${test.periodBStart}–${test.periodBEnd}): ${b.length} refunds
+Change: ${ch}%
+Test Status: ${isPreliminary ? 'IN-FLIGHT (preliminary read — test period not yet complete)' : 'COMPLETE'}
+OKR Goal: ${STATE.settings.okrTarget || 5}% monthly reduction
+
+Was the test successful? What does the data suggest? Should this intervention continue? Any caveats about sample size, confounding factors, or in-flight status? Tie findings to both the team OKR (refund reduction) and broader company priorities (cost containment without sacrificing CSAT).`;
+  try { el.textContent = await callGemini(prompt); } catch (e) { el.textContent = '⚠️ ' + e.message; }
+  el.className = 'ai-response';
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — SOURCES TAB
+// ════════════════════════════════════════════════════════
+function renderSources() {
+  const wrap = document.getElementById('sourcesTableWrap');
+  const summary = document.getElementById('sourcesSummary');
+  if (!STATE.sources.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">🗂</div><p>No sources registered yet. Click "Add source" or load Sample Data to populate.</p></div>';
+    summary.style.display = 'none';
+    return;
+  }
+  const now = Date.now();
+  const STALE_MS = 24 * 60 * 60 * 1000;
+  let fresh = 0, stale = 0, missing = 0;
+  const teamCounts = { CS: 0, 'Supply Chain': 0, 'Logistics': 0 };
+  let html = '<table class="source-table"><thead><tr><th>Source</th><th>Contributed by</th><th>Site</th><th>Method</th><th>Cadence</th><th>Last refresh</th><th>Status</th></tr></thead><tbody>';
+  STATE.sources.forEach(s => {
+    teamCounts[s.team] = (teamCounts[s.team] || 0) + 1;
+    const lastMs = s.last_refreshed_at ? new Date(s.last_refreshed_at).getTime() : 0;
+    const ageMs = now - lastMs;
+    let statusHtml, statusKey;
+    if (!lastMs) { statusHtml = '<span class="freshness-missing">● Missing</span>'; statusKey = 'missing'; missing++; }
+    else if (ageMs < STALE_MS) { statusHtml = '<span class="freshness-fresh">● Fresh</span>'; statusKey = 'fresh'; fresh++; }
+    else { statusHtml = '<span class="freshness-stale">● Stale</span>'; statusKey = 'stale'; stale++; }
+    const teamClass = s.team === 'CS' ? 'team-cs' : s.team === 'Supply Chain' ? 'team-sc' : 'team-log';
+    const teamLabel = s.team;
+    const refreshedText = lastMs ? formatRelative(ageMs) : '—';
+    html += `<tr>
+      <td><strong>${escapeHtml(s.source_name)}</strong></td>
+      <td><span class="source-pill ${teamClass}">${escapeHtml(teamLabel)}</span></td>
+      <td>${escapeHtml(s.site)}</td>
+      <td style="color:var(--text-secondary);">${escapeHtml(s.method)}</td>
+      <td style="color:var(--text-secondary);">${escapeHtml(s.cadence)}</td>
+      <td style="color:var(--text-secondary);">${refreshedText}</td>
+      <td>${statusHtml}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  document.getElementById('srcCountFresh').textContent = fresh + ' fresh';
+  document.getElementById('srcCountStale').textContent = stale + ' stale';
+  document.getElementById('srcCountMissing').textContent = missing + ' missing';
+  document.getElementById('srcTeamBreakdown').textContent =
+    `CS: ${teamCounts.CS} · Supply Chain: ${teamCounts['Supply Chain']} · Logistics: ${teamCounts['Logistics']}`;
+  summary.style.display = 'flex';
+}
+
+function formatRelative(ms) {
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return min + ' min ago';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h ago';
+  const d = Math.floor(hr / 24);
+  return d + 'd ago';
+}
+
+function saveSource() {
+  const name = v('srcName');
+  if (!name) { toast('⚠️ Source name required.', true); return; }
+  const newSource = {
+    source_id: name.toLowerCase().replace(/[^a-z]+/g, '-') + '-' + v('srcSite').toLowerCase(),
+    source_name: name,
+    team: v('srcTeam'),
+    site: v('srcSite'),
+    method: v('srcMethod'),
+    cadence: v('srcCadence'),
+    last_refreshed_at: null,
+    owner_email: STATE.settings.userEmail || '',
+    confidentiality_level: parseInt(v('srcConfLevel')) || 2
+  };
+  STATE.sources.push(newSource);
+  sessionStorage.setItem('rih_sources', JSON.stringify(STATE.sources));
+  ['srcName'].forEach(id => document.getElementById(id).value = '');
+  closeModal('addSourceModal');
+  renderSources();
+  toast('✓ Source added');
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — HISTORY TAB
+// ════════════════════════════════════════════════════════
+function setHistView(view) {
+  STATE.histView = view;
+  document.querySelectorAll('.filter-chip[data-histview]').forEach(c => {
+    c.classList.toggle('active', c.dataset.histview === view);
+  });
+  renderHistory();
+}
+
+function getMonthRange(yearMonth, useLikeForLike) {
+  // yearMonth = "2026-04"
+  const [y, m] = yearMonth.split('-').map(Number);
+  const start = new Date(y, m - 1, 1);
+  const today = new Date();
+  let end;
+  if (useLikeForLike) {
+    // If the month is the current month, end at today; otherwise end at same day-of-month as today
+    const isCurrent = today.getFullYear() === y && today.getMonth() === m - 1;
+    const dayOfMonth = today.getDate();
+    if (isCurrent) end = new Date(today);
+    else end = new Date(y, m - 1, Math.min(dayOfMonth, new Date(y, m, 0).getDate()));
+  } else {
+    end = new Date(y, m, 0); // last day of month
+  }
+  return { start, end };
+}
+
+function renderHistory() {
+  if (!STATE.refunds.length) return;
+  const all = applySiteFilter(STATE.refunds);
+
+  // Populate period dropdowns with available months
+  const months = [...new Set(all.map(r => r.dateStr.substring(0,7)))].sort().reverse();
+  const selA = document.getElementById('histPeriodA');
+  const selB = document.getElementById('histPeriodB');
+  if (!selA.options.length || selA.options.length !== months.length) {
+    selA.innerHTML = months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+    selB.innerHTML = months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+    if (months.length >= 2) {
+      selA.value = months[0]; // most recent
+      selB.value = months[1]; // prior
+    }
+    STATE.histPeriodA = selA.value;
+    STATE.histPeriodB = selB.value;
+  } else {
+    STATE.histPeriodA = selA.value;
+    STATE.histPeriodB = selB.value;
+  }
+
+  const useLFL = STATE.histView === 'like';
+  const rangeA = getMonthRange(STATE.histPeriodA, useLFL);
+  const rangeB = getMonthRange(STATE.histPeriodB, useLFL);
+  const inRange = (r, range) => r.date >= range.start && r.date <= range.end;
+  const dataA = all.filter(r => inRange(r, rangeA));
+  const dataB = all.filter(r => inRange(r, rangeB));
+
+  // 12-mo avg per tag
+  const avg12ByTag = computeTagAvg12(all);
+
+  const tagsAll = [...new Set([...dataA, ...dataB].map(r => r.tag))];
+  const rows = tagsAll.map(tag => {
+    const rA = dataA.filter(r => r.tag === tag);
+    const rB = dataB.filter(r => r.tag === tag);
+    const a = rA.length; const b = rB.length;
+    const aAmt = sumAmount(rA); const bAmt = sumAmount(rB);
+    const avg = avg12ByTag[tag]?.count || 0;
+    const avgAmt = avg12ByTag[tag]?.amount || 0;
+    const ch = bAmt ? ((aAmt - bAmt) / bAmt * 100) : null;
+    return { tag, a, b, avg, aAmt, bAmt, avgAmt, ch };
+  }).sort((x, y) => y.aAmt - x.aAmt);
+
+  const aLabel = useLFL ? `${formatMonth(STATE.histPeriodA)} (D1–today)` : formatMonth(STATE.histPeriodA);
+  const bLabel = useLFL ? `${formatMonth(STATE.histPeriodB)} (same days)` : formatMonth(STATE.histPeriodB);
+
+  let html = `<table class="data-table"><thead><tr>
+    <th>Reason tag</th>
+    <th>${aLabel}<br><span style="font-weight:400;font-size:11px;">Value / Count</span></th>
+    <th>${bLabel}<br><span style="font-weight:400;font-size:11px;">Value / Count</span></th>
+    <th>12-mo avg<br><span style="font-weight:400;font-size:11px;">Value / Count</span></th>
+    <th>Δ vs ${formatMonth(STATE.histPeriodB)}</th>
+  </tr></thead><tbody>`;
+  const flagged = [];
+  rows.forEach(r => {
+    let bgStyle = '';
+    if (r.ch !== null && Math.abs(r.ch) > 10) {
+      bgStyle = r.ch > 0 ? 'background:#FCEBEB;' : 'background:#EAF3DE;';
+      if (r.ch > 10 && r.aAmt > 0) flagged.push(r);
+    }
+    const chCls = r.ch === null ? '' : r.ch > 0 ? 'change-up' : 'change-down';
+    const chStr = r.ch === null ? '—' : (r.ch > 0 ? '▲ +' : '▼ ') + Math.abs(r.ch).toFixed(1) + '%';
+    html += `<tr style="${bgStyle}">
+      <td><span class="tag-pill">${escapeHtml(r.tag)}</span></td>
+      <td>${formatCurrency(r.aAmt)} <span style="color:var(--text-secondary);font-size:11px;">(${r.a})</span></td>
+      <td>${formatCurrency(r.bAmt)} <span style="color:var(--text-secondary);font-size:11px;">(${r.b})</span></td>
+      <td>${formatCurrency(r.avgAmt)} <span style="color:var(--text-secondary);font-size:11px;">(${Math.round(r.avg)})</span></td>
+      <td class="${chCls}">${chStr}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('historyTableWrap').innerHTML = html;
+
+  // Alerts
+  const alertsEl = document.getElementById('historyAlerts');
+  if (flagged.length) {
+    alertsEl.innerHTML = `
+      <div style="background:#FCEBEB; border-left:3px solid #DC2626; border-radius:6px; padding:10px 12px; font-size:12px;">
+        <div style="font-weight:600; color:#791F1F; margin-bottom:4px;">⚠️ ${flagged.length} tag${flagged.length>1?'s':''} flagged for review</div>
+        <div style="color:var(--text); line-height:1.5;">${flagged.map(f => `<strong>${escapeHtml(f.tag)}</strong> is up ${f.ch.toFixed(1)}% MoM`).join('; ')}. Worth cross-referencing with source data on the AI Analysis tab.</div>
+      </div>`;
+  } else {
+    alertsEl.innerHTML = '';
+  }
+}
+
+function formatMonth(ym) {
+  const [y, m] = ym.split('-');
+  return new Date(y, m - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
+}
+
+function computeTagAvg12(arr) {
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+  const tagMonth = {}; // {tag: {YYYY-MM: {count, amount}}}
+  arr.filter(r => r.date >= cutoff && r.date < new Date(today.getFullYear(), today.getMonth(), 1))
+    .forEach(r => {
+      const ym = r.dateStr.substring(0, 7);
+      if (!tagMonth[r.tag]) tagMonth[r.tag] = {};
+      if (!tagMonth[r.tag][ym]) tagMonth[r.tag][ym] = { count: 0, amount: 0 };
+      tagMonth[r.tag][ym].count++;
+      tagMonth[r.tag][ym].amount += (r.amount || 0);
+    });
+  const avg = {};
+  Object.entries(tagMonth).forEach(([tag, months]) => {
+    const vals = Object.values(months);
+    avg[tag] = {
+      count: vals.length ? vals.reduce((a, b) => a + b.count, 0) / vals.length : 0,
+      amount: vals.length ? vals.reduce((a, b) => a + b.amount, 0) / vals.length : 0
+    };
+  });
+  return avg;
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — REPORTS TAB
+// ════════════════════════════════════════════════════════
+function selectTemplate(t) {
+  STATE.selectedTemplate = t;
+  document.querySelectorAll('.template-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.template === t);
+  });
+}
+
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    if (!res.ok) throw new Error('Rate fetch failed');
+    const data = await res.json();
+    const rate = data?.rates?.AUD;
+    if (rate && rate > 0) {
+      STATE.usdToAudRate = rate;
+      toast(`💱 Exchange rate locked: 1 USD = ${rate.toFixed(4)} AUD`);
+    } else {
+      throw new Error('AUD rate not found in response');
+    }
+  } catch (e) {
+    STATE.usdToAudRate = 1.55; // fallback: approximate rate if API unreachable
+    toast('⚠️ Could not fetch live rate — using fallback: 1 USD = 1.55 AUD', true);
+  }
+  applyAUDConversions();
+}
+
+// Convert any AUD-sourced refund rows to USD now that the rate is known, then re-render
+function applyAUDConversions() {
+  const rate = STATE.usdToAudRate;
+  if (!rate) return;
+  const toConvert = STATE.refunds.filter(r => r.sourceCurrency === 'AUD' && r.nativeAmtAUD !== undefined && r.amount === 0);
+  if (!toConvert.length) return;
+  toConvert.forEach(r => { r.amount = r.nativeAmtAUD / rate; });
+  // Re-render whatever is currently visible
+  renderOverview();
+  const activeTab = document.querySelector('.nav-tab.active')?.dataset.tab;
+  if (activeTab === 'reason-tags') renderReasonTags();
+  if (activeTab === 'agent-view') renderAgentView();
+  if (activeTab === 'history') renderHistory();
+}
+
+function wrapReportEmail(innerHtml) {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const site = document.getElementById('reportSite')?.value || 'RBO + TPO';
+  return `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #E8DDF0;border-radius:10px;overflow:hidden;">
+  <!-- HEADER -->
+  <div style="background:linear-gradient(135deg,#7A2A5A,#A03877);padding:24px 28px;text-align:left;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.65);margin-bottom:6px;">Customer Success Operations</div>
+    <div style="font-size:22px;font-weight:700;color:#ffffff;margin-bottom:4px;">💰 Refund Intelligence Hu-pdate</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.75);">${dateStr} &nbsp;·&nbsp; ${site}</div>
+  </div>
+  <!-- BODY -->
+  <div style="padding:28px;color:#1E1428;font-size:14px;line-height:1.7;">
+    ${innerHtml}
+  </div>
+  <!-- FOOTER -->
+  <div style="background:#F7F4F8;border-top:1px solid #E8DDF0;padding:16px 28px;text-align:center;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#A03877;margin-bottom:4px;">💰 Refund Intelligence Hu-pdate</div>
+    <div style="font-size:11px;color:#9B8AAE;">Generated by Refund Intelligence Hub v3 &nbsp;·&nbsp; Customer Success Operations &nbsp;·&nbsp; TeePublic + Redbubble</div>
+    <div style="font-size:10px;color:#C0B0CC;margin-top:4px;">Data is live-filtered at time of generation. For questions, contact CS Ops.</div>
+  </div>
+</div>`;
+}
+
+async function generateReport() {
+  if (!STATE.refunds.length) { toast('⚠️ Load data first.', true); return; }
+  if (!STATE.settings.geminiKey) { toast('⚠️ Configure Gemini API key first.', true); return; }
+  const preview = document.getElementById('emailPreview');
+  preview.innerHTML = '<em style="color:var(--text-light);">✨ Generating report...</em>';
+
+  // Save site context, swap to report site, build context, restore
+  const prevSite = STATE.siteFilter;
+  const reportSite = document.getElementById('reportSite').value;
+  STATE.siteFilter = reportSite;
+  const ctx = buildContext();
+  STATE.siteFilter = prevSite;
+
+  const TEMPLATES = {
+    mbr: `Write an HTML-formatted Monthly Business Review email body for refund performance.
+Include: greeting, headline OKR status (1 paragraph), top reason tags table (HTML <table>), one cross-source observation citing specific source names, and a closing line. Length: 250-350 words.
+Tone: leadership-ready, direct, data-led, no fluff.`,
+    weekly: `Write an HTML-formatted Weekly Trend Update email body. Lead with what changed this week vs. last week. Highlight the top mover (tag or source). 150-200 words. No tables — keep it scannable.`,
+    anomaly: `Write an HTML-formatted Anomaly Alert email body. Identify the single biggest anomaly in the data (tag or source above 12-mo avg by >15%). Cite the specific source name. Recommend a next step. 100-150 words. Subject-line worthy.`,
+    test: `Write an HTML-formatted email body summarizing active deflection test results. Pull from the data context. If no tests are running, say so and recommend one based on the top deflectable tag. 150-200 words.`
+  };
+  const tpl = TEMPLATES[STATE.selectedTemplate];
+
+  const prompt = `${ctx}
+
+Site scope for this email: ${reportSite}
+${tpl}
+
+Use only inline HTML (no <html>, <body>, or <head> tags). Use <p>, <h2>, <table>, <strong>, <em> as needed.
+For changes, wrap positives in <span class="change-down">▼ -X.X%</span> and negatives in <span class="change-up">▲ +X.X%</span>.
+Wrap source names in <span style="background:white;border:1px solid #E8DDF0;padding:1px 6px;border-radius:10px;font-size:11px;">Source name</span>.`;
+  try {
+    const html = await callGemini(prompt);
+    STATE.generatedReportHtml = wrapReportEmail(html);
+    preview.innerHTML = STATE.generatedReportHtml;
+    // Auto-fill subject if empty
+    const subjectEl = document.getElementById('reportSubject');
+    if (!subjectEl.value) {
+      const subjects = {
+        mbr: `${formatMonth(new Date().toISOString().substring(0,7))} MBR — Refund Performance`,
+        weekly: 'Weekly refund trend update',
+        anomaly: '⚠️ Refund anomaly — review needed',
+        test: 'Deflection test update'
+      };
+      subjectEl.value = subjects[STATE.selectedTemplate];
+    }
+  } catch (e) {
+    preview.innerHTML = '<em style="color:var(--danger);">Error: ' + escapeHtml(e.message) + '</em>';
+  }
+}
+
+async function copyReportAsHtml() {
+  if (!STATE.generatedReportHtml) { toast('⚠️ Generate a report first.', true); return; }
+  try {
+    const blob = new Blob([STATE.generatedReportHtml], { type: 'text/html' });
+    const plainText = STATE.generatedReportHtml
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    const plainBlob = new Blob([plainText], { type: 'text/plain' });
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'text/html': blob, 'text/plain': plainBlob })
+    ]);
+    toast('✓ HTML copied — paste into Gmail or any email client');
+  } catch (e) {
+    // Fallback
+    await navigator.clipboard.writeText(STATE.generatedReportHtml);
+    toast('✓ Copied as plain text (HTML clipboard not supported in this browser)');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — GMAIL SEND
+// ════════════════════════════════════════════════════════
+function buildMimeMessage({ to, subject, htmlBody, fromEmail }) {
+  const boundary = '__BOUNDARY__' + Math.random().toString(36).slice(2);
+  const mime = [
+    `From: ${fromEmail}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    htmlBody,
+    `--${boundary}--`
+  ].join('\r\n');
+  return btoa(unescape(encodeURIComponent(mime)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function sendViaGmail() {
+  if (!STATE.generatedReportHtml) { toast('⚠️ Generate a report first.', true); return; }
+  const to = v('reportTo');
+  const subject = v('reportSubject');
+  if (!to) { toast('⚠️ Enter at least one recipient.', true); return; }
+  if (!subject) { toast('⚠️ Enter a subject.', true); return; }
+  if (!STATE.googleAccessToken) {
+    // Re-auth with gmail.send scope
+    requestGoogleAuth(['https://www.googleapis.com/auth/gmail.send'], () => sendViaGmail());
+    return;
+  }
+  try {
+    const fromEmail = STATE.settings.userEmail || 'me';
+    const raw = buildMimeMessage({ to, subject, htmlBody: STATE.generatedReportHtml, fromEmail });
+    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + STATE.googleAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || res.status);
+    }
+    toast('✓ Email sent via Gmail');
+  } catch (e) {
+    toast('⚠️ Send failed: ' + e.message, true);
+  }
+}
+
+// V3: shared OAuth handler with flexible scope
+function requestGoogleAuth(scopes, callback) {
+  const clientId = STATE.settings.googleClientId;
+  if (!clientId) { toast('⚠️ Add Google Client ID in Settings first.', true); return; }
+  if (typeof google === 'undefined' || !google.accounts) {
+    toast('⚠️ Run via local server (python -m http.server 8000) for Google Auth.', true);
+    return;
+  }
+  google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: scopes.join(' '),
+    callback: (resp) => {
+      if (resp.access_token) {
+        STATE.googleAccessToken = resp.access_token;
+        updateDots();
+        if (callback) callback();
+      } else {
+        toast('⚠️ Auth failed.', true);
+      }
+    }
+  }).requestAccessToken();
+}
+
+// ════════════════════════════════════════════════════════
+// V3 — GOOGLE SHEETS BACKEND (placeholder; Sprint 1 work)
+// ════════════════════════════════════════════════════════
+async function loadFromSheet() {
+  if (!STATE.settings.sheetId) { toast('⚠️ Set the Sheet ID in Settings first.', true); return; }
+  if (!STATE.googleAccessToken) {
+    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly'], () => loadFromSheet());
+    return;
+  }
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${STATE.settings.sheetId}/values/${encodeURIComponent('refunds_master!A2:L')}`;
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + STATE.googleAccessToken } });
+    if (!res.ok) throw new Error('Sheets read failed: ' + res.status);
+    const data = await res.json();
+    const rows = (data.values || []).filter(r => r[1]);  // skip blank rows
+    const refunds = rows.map(r => ({
+      refund_id: r[0],
+      dateStr: r[1],
+      date: new Date(r[1]),
+      site: r[2] || 'TPO',
+      team: r[3] || 'CS',
+      source: r[4] || 'Unknown',
+      tag: r[5] || 'Untagged',
+      amount: parseFloat(r[6]) || 0,
+      agent: r[7] || 'Unknown',
+      ticketId: r[8] || '',
+      orderId: r[9] || '',
+      ingested_at: r[10] || '',
+      ingested_by: r[11] || ''
+    })).filter(r => !isNaN(r.date));
+    if (!refunds.length) { toast('No refund rows found in Sheet.', true); return; }
+    loadData(refunds, `${refunds.length.toLocaleString()} refunds loaded from Sheet`);
+  } catch (e) {
+    toast('⚠️ Sheet load failed: ' + e.message, true);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════════════
+function toast(msg, isError = false) {
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  el.style.background = isError ? '#DC2626' : 'var(--primary)';
+  // Stack above any toasts already on screen
+  const existing = document.querySelectorAll('.toast');
+  el.style.bottom = (22 + existing.length * 48) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => {
+      el.remove();
+      // Reflow remaining toasts back down
+      document.querySelectorAll('.toast').forEach((t, i) => { t.style.bottom = (22 + i * 48) + 'px'; });
+    }, 350);
+  }, 5000);
+}
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+loadSettingsUI();
+updateDots();
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</body>
+</html>
