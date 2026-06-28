@@ -5,10 +5,10 @@ Single-file HTML tool for cross-functional refund analysis (CS, Supply Chain, Lo
 ## Live URL
 
 ```
-https://<project>.pages.dev
+https://refundintelhub.pages.dev
 ```
 
-(Set when you create the Cloudflare Pages project. Access is gated by Cloudflare Access to an allow-list of emails — viewers do **not** need GitHub accounts.)
+(Hosted on Cloudflare Pages. Access is gated by Cloudflare Access to an allow-list of emails — viewers do **not** need GitHub accounts.)
 
 ## Config
 
