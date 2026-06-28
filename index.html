@@ -1749,14 +1749,23 @@ async function publishRefundsToSheet(refunds, opts = {}) {
     const clearRes = await fetch(clearUrl, { method: 'POST', headers: authHeader });
     if (await handledFailure(clearRes, 'clear')) return;
 
+    // Write back in chunks — a single request can't carry hundreds of thousands
+    // of rows (Google rejects/stalls oversized payloads). Append chunk by chunk
+    // after the clear so large datasets publish reliably.
     if (combined.length) {
-      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2')}?valueInputOption=RAW`;
-      const writeRes = await fetch(writeUrl, {
-        method: 'PUT',
-        headers: { ...authHeader, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: combined })
-      });
-      if (await handledFailure(writeRes, 'write')) return;
+      const CHUNK = 10000;
+      const totalChunks = Math.ceil(combined.length / CHUNK);
+      const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+      for (let i = 0; i < combined.length; i += CHUNK) {
+        const chunk = combined.slice(i, i + CHUNK);
+        if (totalChunks > 1) toast(`☁️ Publishing to Sheet… chunk ${Math.floor(i / CHUNK) + 1} of ${totalChunks}`);
+        const writeRes = await fetch(appendUrl, {
+          method: 'POST',
+          headers: { ...authHeader, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: chunk })
+        });
+        if (await handledFailure(writeRes, 'write')) return;
+      }
     }
     toast(`☁️ Published ${newRows.length.toLocaleString()} rows${removed ? ` · replaced ${removed.toLocaleString()}` : ''} in the shared Sheet`);
   } catch (e) {
