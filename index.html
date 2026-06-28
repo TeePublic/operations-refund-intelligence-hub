@@ -306,9 +306,9 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
     </div>
     <hr class="modal-divider">
     <div class="form-group">
-      <label>Refund Reduction OKR Target (% decrease, month-over-month)</label>
+      <label>Refund Reduction OKR Target (% decrease, year-over-year)</label>
       <input type="number" id="okrTarget" min="0" max="100" step="0.25" placeholder="5" style="width:120px;">
-      <div class="form-hint">The goal is always a MoM % decrease in refund value; set the target % here. Drives the Refund Reduction bar on the Overview.</div>
+      <div class="form-hint">The goal is always a YoY % decrease in refund value; set the target % here. Drives the OKR: YoY Reduction card on the Overview.</div>
     </div>
 
     <div class="modal-actions">
@@ -451,15 +451,6 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
     </div>
   </div>
 
-  <!-- OKR Progress Banner (Item 5) — primary visual; one bar per okr_targets row -->
-  <div class="card" id="okrBanner" style="margin-bottom:18px; display:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-      <div class="card-title" style="margin:0;">🎯 OKR Progress</div>
-      <button class="btn btn-outline btn-sm" id="editOkrBtn" style="display:none;" onclick="openOkrEditModal()">✏️ Edit OKRs</button>
-    </div>
-    <div id="okrBannerBody"></div>
-  </div>
-
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label" id="kpiTotalLabel">Total Refund Value</div>
@@ -474,10 +465,10 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
       <div class="kpi-sub" id="kpiPriorCount" style="margin-top:3px;"></div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">OKR: MoM Reduction</div>
+      <div class="kpi-label">OKR: YoY Reduction</div>
       <div class="kpi-value" id="kpiOkr">—</div>
       <div class="okr-bar-wrap"><div class="okr-bar" id="okrBar" style="width:0%"></div></div>
-      <div class="kpi-sub" id="kpiOkrSub">Target: 5% reduction MoM</div>
+      <div class="kpi-sub" id="kpiOkrSub">Target: 5% reduction YoY</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label" id="kpi12moLabel">Same Month Last Year</div>
@@ -959,21 +950,6 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="applyColumnMapping()">Import ↑</button>
       <button class="btn btn-ghost" onclick="closeModal('columnMapperModal'); STATE._pendingRows=null; STATE._pendingHeaders=null; STATE._pendingMeta=null;">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- OKR edit modal (Item 5) — edit target values inline, writes back to okr_targets tab -->
-<div class="modal-overlay" id="okrEditModal">
-  <div class="modal">
-    <div class="modal-title">✏️ Edit OKR Targets</div>
-    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
-      Adjust target values below. Saving writes back to the <strong>okr_targets</strong> tab in the Sheet — no redeploy needed.
-    </p>
-    <div id="okrEditRows"></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveOkrTargets()">Save targets</button>
-      <button class="btn btn-ghost" onclick="closeModal('okrEditModal')">Cancel</button>
     </div>
   </div>
 </div>
@@ -1727,6 +1703,7 @@ async function publishRefundsToSheet(refunds, opts = {}) {
     return;
   }
   if (!STATE.googleAccessToken) {
+    toast('🔐 Approve the Google sign-in popup to save this upload to the shared Sheet (allow pop-ups for this site).', true);
     requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => publishRefundsToSheet(refunds, opts));
     return;
   }
@@ -2218,8 +2195,6 @@ function renderOverview() {
   if (!all.length) return;
   const okrT = STATE.settings.okrTarget || 5;
 
-  renderOkrBanner();   // OKR-first: primary visual at the top of the Overview
-
   // Month reference points
   const today = new Date();
   const lastMoDate   = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -2256,9 +2231,9 @@ function renderOverview() {
   document.getElementById('kpiTotalChange').innerHTML = `<span class="${mom > 0 ? 'change-up' : 'change-down'}">${momStr}</span>`;
   set('kpiPriorSub', `Full month comparison`);
 
-  // OKR: reduction from two months ago → last month (both full months)
-  const reduction = twoMoAmt ? ((twoMoAmt - lastMoAmt) / twoMoAmt * 100) : 0;
-  const pct = twoMoAgo.length
+  // OKR: year-over-year reduction (same month last year → last full month)
+  const reduction = lastYrMoAmt ? ((lastYrMoAmt - lastMoAmt) / lastYrMoAmt * 100) : 0;
+  const pct = lastYrMo.length
     ? Math.max(3, Math.min(100, (Math.abs(reduction) / okrT) * 100))
     : 3;
   const okrLabel = reduction > 0
@@ -2270,7 +2245,7 @@ function renderOverview() {
   const bar = document.getElementById('okrBar');
   bar.style.width = pct + '%';
   bar.className = 'okr-bar ' + (reduction >= okrT ? 'on-track' : 'off-track');
-  set('kpiOkrSub', `${twoMoLabel} → ${lastMoLabel} | Target: ${okrT}% | ${reduction >= okrT ? '✓ On Track' : '✗ Off Track'}`);
+  set('kpiOkrSub', `${lastYrMoLabel} → ${lastMoLabel} | Target: ${okrT}% | ${reduction >= okrT ? '✓ On Track' : '✗ Off Track'}`);
 
   // YoY KPI: same month last year (full)
   set('kpi12moAvg', formatCurrency(lastYrMoAmt));
