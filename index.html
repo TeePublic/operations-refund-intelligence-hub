@@ -984,15 +984,18 @@ mark { background: #F3E0EC; color: #7A2A5A; border-radius: 3px; padding: 0 2px; 
 
 <script>
 // ════════════════════════════════════════════════════════
-// SITE CONFIG — non-sensitive defaults, pre-populated for all users
-// ⚠️ Do NOT put API keys, tokens, password hashes, or the OAuth Client ID here.
-// settingsPasswordHash and googleClientId are injected at BUILD TIME by the
-// GitHub Actions deploy workflow (from the SETTINGS_PASSWORD and GOOGLE_CLIENT_ID
-// repo Secrets). The repo source only ever holds the __…_PLACEHOLDER__ tokens.
+// SITE CONFIG — baked-in defaults (no build step; hosted on Cloudflare Pages
+// behind Cloudflare Access). The site is private + the repo is private, so the
+// non-secret config below is safe to ship in the file.
+//   • googleClientId — public by design (visible in the OAuth flow regardless)
+//   • sheetId        — access is permissioned by Google, not by obscurity
+//   • settingsPasswordHash — SHA-256 of the settings password; only gates the
+//     in-app Settings panel (Cloudflare Access is the real perimeter).
+//     Generate with:  printf '%s' 'YOUR_PASSWORD' | shasum -a 256 | cut -d' ' -f1
 // ════════════════════════════════════════════════════════
 const SITE_CONFIG = {
-  sheetId:             '__SHEET_ID_PLACEHOLDER__', // injected at build time (SHEET_ID secret) so all users auto-connect
-  googleClientId:      '__GOOGLE_CLIENT_ID_PLACEHOLDER__', // injected at build time (GOOGLE_CLIENT_ID secret)
+  sheetId:             '1oFLsEfGPwVOez9GcQXmpAXaa1Wc1DSssFS8at9siazg', // RIH Master Data
+  googleClientId:      '484404641729-igmlovbklt3hbemhoaj9c5os8iduqcru.apps.googleusercontent.com',
   userEmail:           '',          // your work email
   sopDocIdTpo:         '',          // TPO SOP Google Doc ID
   sopDocIdRbo:         '',          // RBO SOP Google Doc ID
@@ -1000,7 +1003,7 @@ const SITE_CONFIG = {
   zdSubdomainRbo:      'redbubble', // RBO Zendesk subdomain
   zdEmail:             '',          // TPO Zendesk agent email
   zdEmailRbo:          '',          // RBO Zendesk agent email
-  settingsPasswordHash: '__SETTINGS_HASH_PLACEHOLDER__', // injected at build time (SHA-256 of SETTINGS_PASSWORD secret)
+  settingsPasswordHash: '__SETTINGS_HASH_PLACEHOLDER__', // ← replace with your SHA-256 hash (see above)
 };
 
 // ════════════════════════════════════════════════════════

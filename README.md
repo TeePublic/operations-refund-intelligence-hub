@@ -1,50 +1,53 @@
 # Refund Intelligence Hub
 
-Single-file HTML tool for cross-functional refund analysis (CS, Supply Chain, Logistics) across TeePublic (TPO) and Redbubble (RBO). The entire app is `index.html`; it deploys to GitHub Pages via GitHub Actions.
+Single-file HTML tool for cross-functional refund analysis (CS, Supply Chain, Logistics) across TeePublic (TPO) and Redbubble (RBO). The entire app is `index.html` — a plain static file, hosted on **Cloudflare Pages** behind **Cloudflare Access** for private, members-only viewing.
 
 ## Live URL
 
 ```
-https://teepublic.github.io/operations-refund-intelligence-hub/
+https://<project>.pages.dev
 ```
 
-Access is restricted (private Pages) to TeePublic org members with read access to this repo. The exact URL also appears on each successful workflow run under the `github-pages` environment, and on Settings → Pages.
+(Set when you create the Cloudflare Pages project. Access is gated by Cloudflare Access to an allow-list of emails — viewers do **not** need GitHub accounts.)
 
-## Deploy setup
+## Config
 
-Deployment runs from `.github/workflows/deploy.yml` on every push to `main`. It injects two repo Secrets into `index.html` at build time so they never live in the repo source (the source only ever holds `__SETTINGS_HASH_PLACEHOLDER__` / `__GOOGLE_CLIENT_ID_PLACEHOLDER__`, and the build hard-fails if a placeholder survives).
+Non-secret config is baked into `SITE_CONFIG` at the top of the `index.html` script (the site is private and the repo is private, so this is safe):
 
-To go live, in the GitHub repo:
+- `googleClientId` — OAuth Client ID (public by design).
+- `sheetId` — the "RIH Master Data" Sheet (access is permissioned by Google).
+- `settingsPasswordHash` — SHA-256 of the in-app Settings password. Generate with:
+  ```
+  printf '%s' 'YOUR_PASSWORD' | shasum -a 256 | cut -d' ' -f1
+  ```
+  Paste the hash into `SITE_CONFIG.settingsPasswordHash`. (This only gates the in-app Settings panel; Cloudflare Access is the real perimeter.)
 
-1. **Add repo Secrets** (Settings → Secrets and variables → Actions):
-   - `SETTINGS_PASSWORD` — the settings-panel password (the workflow stores only its SHA-256 hash).
-   - `GOOGLE_CLIENT_ID` — the OAuth Client ID.
-   - `SHEET_ID` — the master Google Sheet ID, so every user auto-connects (and uploads auto-publish) without entering it. Kept out of the public source via injection.
+## Deploy (Cloudflare Pages — Direct Upload)
 
-   The first workflow run warns if `SHEET_ID` is empty and fails at the inject step until the placeholders are replaced. Re-run after adding the secrets.
+No build step, no GitHub connection required.
 
-2. **Set the Pages source to GitHub Actions** (Settings → Pages → Build and deployment → Source = **GitHub Actions**).
-   ⚠️ Do **not** use "Deploy from a branch" — that serves the raw source with placeholders un-injected (broken password + OAuth) and bypasses secret injection.
-
-3. **Authorize the Pages origin for OAuth.** In the Google Cloud console (APIs & Services → Credentials → your OAuth client), add to **Authorized JavaScript origins** (origin only, no path/trailing slash):
+1. Cloudflare dashboard → **Workers & Pages → Create → Pages → Upload assets**. Name the project (this sets `https://<project>.pages.dev`) and drag in `index.html`.
+2. **Add Cloudflare Access** over the project: Zero Trust → Access → Applications → Add a self-hosted app for the `pages.dev` hostname, with an **Allow policy** listing the permitted emails (one-time PIN login).
+3. **Authorize the origin for OAuth.** Google Cloud console → APIs & Services → Credentials → the OAuth client → **Authorized JavaScript origins**, add (origin only, no path/trailing slash):
    ```
-   https://teepublic.github.io
+   https://<project>.pages.dev
    ```
-   Without this, Google Sheets / Drive / Gmail auth is rejected on the live site.
+   Without this, Google Sheets / Drive auth — and therefore data persistence — is rejected on the live site.
 
-4. **Provision the Google Sheet** ("RIH Master Data") with three tabs the app reads via **☁️ Load from Sheet** (row 1 = headers):
-   - `refunds_master` — A:M: `refund_id, date, site, team, source, tag, amount, currency, agent, ticket_id, order_id, ingested_at, ingested_by`
-   - `okr_targets` — A:F: `metric, target, unit, direction, label, updated_at`
-   - `sources_registry` — A:F: `name, team, site, type, conf_level, last_updated`
+To update the site later, re-upload `index.html` to the same project (or use `wrangler pages deploy`).
 
-## Shared data
+## Google Sheet (the persistence layer)
 
-The Google Sheet is the single shared source of truth. Uploading a file (CSV / Excel / Drive) auto-publishes its rows to `refunds_master`, and the app auto-loads from the Sheet on open — so coworkers see the same data without re-uploading. Publishing uses **replace-by-source**: re-uploading a given source+site refreshes those rows instead of duplicating them. (Reads/writes still require each user's own Google sign-in; concurrent edits are last-write-wins.) Sample/demo data is never published.
+"RIH Master Data" must have three tabs (row 1 = headers):
 
-## Security note
+- `refunds_master` — A:M: `refund_id, date, site, team, source, tag, amount, currency, agent, ticket_id, order_id, ingested_at, ingested_by`
+- `okr_targets` — A:F: `metric, target, unit, direction, label, updated_at`
+- `sources_registry` — A:F: `name, team, site, type, conf_level, last_updated`
 
-GitHub Pages sites are publicly reachable by default. No secrets or refund data live in the repo source (data loads client-side via OAuth), and the Settings panel is password-gated — but the app shell itself is open to anyone with the URL. If the whole app needs to be access-restricted, that requires a private Pages site (GitHub Pro/Team/Enterprise) or fronting it with auth.
+## Shared data & retention
+
+The Google Sheet is the single shared source of truth — uploaded data lives there, not in the website. Uploading a file (CSV / Excel / Drive) auto-publishes its rows to `refunds_master`, and the app auto-loads from the Sheet on open, so both users see the same data without re-uploading. Publishing uses **replace-by-source**: re-uploading a given source+site refreshes those rows instead of duplicating them. (Reads/writes require each user's own Google sign-in; concurrent edits are last-write-wins.) Sample/demo data is never published. Note: Deflection Tests and per-user settings are browser-local (sessionStorage), not Sheet-backed.
 
 ## Local preview
 
-`index.html` is fully static. Serve the repo root with any static server and open the page — settings and OAuth degrade gracefully when the build placeholders aren't injected.
+`index.html` is fully static. Serve the folder with any static server (e.g. `node .claude/serve.js`) and open the page.
