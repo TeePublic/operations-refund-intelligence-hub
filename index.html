@@ -2703,7 +2703,7 @@ function connectGoogleDocs() {
     || (STATE.activeSopSite === 'RBO' ? STATE.settings.sopDocIdRbo : STATE.settings.sopDocIdTpo);
   if (!clientId) { toast('⚠️ Add your Google Client ID in Settings first.', true); return; }
   if (!docId) { toast('⚠️ Enter a Doc ID.', true); return; }
-  if (typeof google === 'undefined' || !google.accounts) { toast('⚠️ Run via a local server (python -m http.server 8000) for Google Auth.', true); return; }
+  if (typeof google === 'undefined' || !google.accounts) { toast('⚠️ Google sign-in is still loading — try again in a moment.', true); return; }
   google.accounts.oauth2.initTokenClient({
     client_id: clientId, scope: 'https://www.googleapis.com/auth/documents.readonly',
     callback: async (resp) => {
@@ -3303,7 +3303,7 @@ function requestGoogleAuth(scopes, callback) {
   const clientId = STATE.settings.googleClientId;
   if (!clientId) { toast('⚠️ Add Google Client ID in Settings first.', true); return; }
   if (typeof google === 'undefined' || !google.accounts) {
-    toast('⚠️ Run via local server (python -m http.server 8000) for Google Auth.', true);
+    toast('⚠️ Google sign-in is still loading — try again in a moment.', true);
     return;
   }
   google.accounts.oauth2.initTokenClient({
@@ -3477,10 +3477,17 @@ loadSettingsUI();
 updateDots();
 
 // Shared persistence: if a Sheet is configured, auto-load it on open so coworkers
-// see published data without re-uploading. (Reading the Sheet still requires their
-// own Google sign-in; the popup may need a click if the browser blocks it on load.)
+// see published data without re-uploading. We wait for the Google Identity Services
+// library (loaded async, below) to be ready before attempting — otherwise the auth
+// call fires too early and bails. Reading the Sheet still needs the user's Google
+// sign-in; if the browser blocks the auto popup, the ☁️ Load from Sheet button retries.
+function whenGoogleReady(cb, tries = 0) {
+  if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) { cb(); return; }
+  if (tries > 40) return;  // ~10s; give up silently — user can click Load from Sheet
+  setTimeout(() => whenGoogleReady(cb, tries + 1), 250);
+}
 if (STATE.settings.sheetId) {
-  loadFromSheet();
+  whenGoogleReady(() => loadFromSheet());
 }
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
