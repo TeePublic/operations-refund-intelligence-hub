@@ -1709,19 +1709,36 @@ function refundToSheetRow(r, now, who) {
   ];
 }
 
-async function publishRefundsToSheet(refunds) {
+async function publishRefundsToSheet(refunds, opts = {}) {
   if (!refunds || !refunds.length) return;
   if (!STATE.settings.sheetId) {
     toast('ℹ️ No Sheet ID set — data is local only, not shared. Add it in ⚙️ Settings to publish.', true);
     return;
   }
   if (!STATE.googleAccessToken) {
-    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => publishRefundsToSheet(refunds));
+    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => publishRefundsToSheet(refunds, opts));
     return;
   }
   const sheetId = STATE.settings.sheetId;
   const authHeader = { Authorization: 'Bearer ' + STATE.googleAccessToken };
-  const reauth = () => { STATE.googleAccessToken = null; requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => publishRefundsToSheet(refunds)); };
+  // Returns true if the failure was handled (caller should stop). Distinguishes a
+  // genuine token problem (re-auth once) from a config error such as the Sheets
+  // API being disabled — which we surface verbatim instead of re-auth looping.
+  async function handledFailure(res, stage) {
+    if (res.ok) return false;
+    const body = await res.json().catch(() => ({}));
+    const msg = body.error?.message || `${stage} failed (HTTP ${res.status})`;
+    const looksAuth = (res.status === 401 || res.status === 403)
+      && !/disabled|has not been used|SERVICE_DISABLED|consumer/i.test(msg);
+    if (looksAuth && !opts._retried) {
+      STATE.googleAccessToken = null;
+      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'],
+        () => publishRefundsToSheet(refunds, { ...opts, _retried: true }));
+      return true;
+    }
+    toast('⚠️ Publish failed — ' + msg, true);
+    return true;
+  }
   try {
     const now = new Date().toISOString();
     const who = STATE.settings.userEmail || '';
@@ -1732,8 +1749,7 @@ async function publishRefundsToSheet(refunds) {
     // 1. Read existing rows so we can drop the ones we're replacing
     const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2:M')}`;
     const readRes = await fetch(readUrl, { headers: authHeader });
-    if (readRes.status === 401 || readRes.status === 403) { reauth(); return; }
-    if (!readRes.ok) throw new Error('read failed: ' + readRes.status);
+    if (await handledFailure(readRes, 'read')) return;
     const existing = (await readRes.json()).values || [];
     // col C (index 2) = site, col E (index 4) = source
     const kept = existing.filter(row => !replaceKeys.has(`${row[4] || ''}||${row[2] || ''}`));
@@ -1743,8 +1759,7 @@ async function publishRefundsToSheet(refunds) {
     // 2. Clear the data range, then write the combined set back from A2
     const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2:M')}:clear`;
     const clearRes = await fetch(clearUrl, { method: 'POST', headers: authHeader });
-    if (clearRes.status === 401 || clearRes.status === 403) { reauth(); return; }
-    if (!clearRes.ok) throw new Error('clear failed: ' + clearRes.status);
+    if (await handledFailure(clearRes, 'clear')) return;
 
     if (combined.length) {
       const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2')}?valueInputOption=RAW`;
@@ -1753,8 +1768,7 @@ async function publishRefundsToSheet(refunds) {
         headers: { ...authHeader, 'Content-Type': 'application/json' },
         body: JSON.stringify({ values: combined })
       });
-      if (writeRes.status === 401 || writeRes.status === 403) { reauth(); return; }
-      if (!writeRes.ok) throw new Error('write failed: ' + writeRes.status);
+      if (await handledFailure(writeRes, 'write')) return;
     }
     toast(`☁️ Published ${newRows.length.toLocaleString()} rows${removed ? ` · replaced ${removed.toLocaleString()}` : ''} in the shared Sheet`);
   } catch (e) {
