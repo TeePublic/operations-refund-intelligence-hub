@@ -1009,7 +1009,7 @@ const SITE_CONFIG = {
   zdSubdomainRbo:      'redbubble', // RBO Zendesk subdomain
   zdEmail:             '',          // TPO Zendesk agent email
   zdEmailRbo:          '',          // RBO Zendesk agent email
-  settingsPasswordHash: '5ea632ef78c3e6d64653087d3f810972f97691ae93e064b08e6dbca4a671cb8d', // SHA-256 of the settings password
+  settingsPasswordHash: '', // no in-app password — Settings opens freely (Cloudflare Access gates the whole site). To add one: printf '%s' 'your-real-password' | shasum -a 256 | cut -d' ' -f1  → paste the hash here.
 };
 
 // ════════════════════════════════════════════════════════
