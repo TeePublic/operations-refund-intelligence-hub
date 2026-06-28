@@ -3328,10 +3328,12 @@ function requestGoogleAuth(scopes, callback) {
 //   okr_targets!A2:F     → STATE.okrTargets (drives the Overview OKR banner)
 //   sources_registry!A2:F → merged into STATE.sources (pre-seeds the Sources tab)
 // ════════════════════════════════════════════════════════
-async function loadFromSheet() {
-  if (!STATE.settings.sheetId) { toast('⚠️ Set the Sheet ID in Settings first.', true); return; }
+async function loadFromSheet(opts = {}) {
+  // opts.auto === true → triggered automatically on page open; stay quiet when the
+  // Sheet is simply empty (normal before any data is uploaded) instead of erroring.
+  if (!STATE.settings.sheetId) { if (!opts.auto) toast('⚠️ Set the Sheet ID in Settings first.', true); return; }
   if (!STATE.googleAccessToken) {
-    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly'], () => loadFromSheet());
+    requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly'], () => loadFromSheet(opts));
     return;
   }
   try {
@@ -3343,7 +3345,7 @@ async function loadFromSheet() {
       // Token expired or insufficient scope — drop it and re-auth once
       STATE.googleAccessToken = null;
       toast('⚠️ Sheets access denied — re-authorizing…', true);
-      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly'], () => loadFromSheet());
+      requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly'], () => loadFromSheet(opts));
       return;
     }
     if (res.status === 404) { toast('⚠️ Sheet not found — check the Sheet ID in Settings.', true); return; }
@@ -3367,7 +3369,11 @@ async function loadFromSheet() {
 
     // ─── refunds_master (required) ───
     const refundRows = (byRange['refunds_master'] || []).filter(r => r[1]); // need a date
-    if (!refundRows.length) { toast('No refund rows found in refunds_master.', true); return; }
+    if (!refundRows.length) {
+      // Empty Sheet is normal before any upload — only flag it on a manual load
+      if (!opts.auto) toast('No refund rows found in refunds_master yet — upload a file to populate it.', true);
+      return;
+    }
     // Schema sanity check: a valid row carries at least through the amount column (G)
     if (refundRows.some(r => r.length < 7)) {
       toast('⚠️ Schema mismatch in refunds_master — expected 13 columns (A:M).', true);
@@ -3396,7 +3402,7 @@ async function loadFromSheet() {
         ingested_by: r[12] || ''
       };
     }).filter(r => !isNaN(r.date));
-    if (!refunds.length) { toast('⚠️ No valid dates in refunds_master — check column B.', true); return; }
+    if (!refunds.length) { if (!opts.auto) toast('⚠️ No valid dates in refunds_master — check column B.', true); return; }
 
     // ─── okr_targets (optional) ───
     const okrRows = byRange['okr_targets'] || [];
@@ -3487,7 +3493,7 @@ function whenGoogleReady(cb, tries = 0) {
   setTimeout(() => whenGoogleReady(cb, tries + 1), 250);
 }
 if (STATE.settings.sheetId) {
-  whenGoogleReady(() => loadFromSheet());
+  whenGoogleReady(() => loadFromSheet({ auto: true }));
 }
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
