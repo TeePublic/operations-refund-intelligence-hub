@@ -1682,8 +1682,10 @@ function loadData(refunds, statusMsg, opts = {}) {
 // "Replace rows for this source": for every source+site present in the upload,
 // existing rows in the Sheet are removed and replaced with the fresh set, so
 // re-uploading a source refreshes it cleanly instead of duplicating.
+// Only the trailing RETENTION_MONTHS are kept in the Sheet (size/perf cap).
 // (Read-filter-rewrite; last write wins on concurrent edits.)
 // ════════════════════════════════════════════════════════
+const RETENTION_MONTHS = 16;   // how many trailing months the Sheet retains
 function refundToSheetRow(r, now, who) {
   const isAUD = r.sourceCurrency === 'AUD';
   // Persist the native amount + currency so AUD rows round-trip faithfully
@@ -1719,7 +1721,7 @@ async function publishRefundsToSheet(refunds, opts = {}) {
     const looksAuth = (res.status === 401 || res.status === 403)
       && !/disabled|has not been used|SERVICE_DISABLED|consumer/i.test(msg);
     if (looksAuth && !opts._retried) {
-      STATE.googleAccessToken = null;
+      STATE.googleAccessToken = null; try { sessionStorage.removeItem("rih_gtoken"); } catch (e) {}
       requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'],
         () => publishRefundsToSheet(refunds, { ...opts, _retried: true }));
       return true;
@@ -1742,7 +1744,14 @@ async function publishRefundsToSheet(refunds, opts = {}) {
     // col C (index 2) = site, col E (index 4) = source
     const kept = existing.filter(row => !replaceKeys.has(`${row[4] || ''}||${row[2] || ''}`));
     const removed = existing.length - kept.length;
-    const combined = kept.concat(newRows);
+    // Retention: keep only the trailing RETENTION_MONTHS in the Sheet so it stays
+    // well under Google's 10M-cell limit and loads fast. (col B / index 1 = date)
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - RETENTION_MONTHS);
+    const cutoffStr = toISODate(cutoff);
+    const beforeTrim = kept.concat(newRows);
+    const combined = beforeTrim.filter(row => (row[1] || '') >= cutoffStr);
+    const trimmed = beforeTrim.length - combined.length;
 
     // 2. Clear the data range, then write the combined set back from A2
     const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('refunds_master!A2:M')}:clear`;
@@ -1767,7 +1776,7 @@ async function publishRefundsToSheet(refunds, opts = {}) {
         if (await handledFailure(writeRes, 'write')) return;
       }
     }
-    toast(`☁️ Published ${newRows.length.toLocaleString()} rows${removed ? ` · replaced ${removed.toLocaleString()}` : ''} in the shared Sheet`);
+    toast(`☁️ Published ${newRows.length.toLocaleString()} rows · Sheet now holds ${combined.length.toLocaleString()} (trailing ${RETENTION_MONTHS}mo${trimmed ? `, trimmed ${trimmed.toLocaleString()} older` : ''})`);
   } catch (e) {
     toast('⚠️ Publish to Sheet failed (data is local only): ' + e.message, true);
   }
@@ -2185,7 +2194,7 @@ async function writeOkrTargetsToSheet(targets) {
       body: JSON.stringify({ values })
     });
     if (res.status === 401 || res.status === 403) {
-      STATE.googleAccessToken = null;
+      STATE.googleAccessToken = null; try { sessionStorage.removeItem("rih_gtoken"); } catch (e) {}
       requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => writeOkrTargetsToSheet(targets));
       return;
     }
@@ -3390,6 +3399,15 @@ function requestGoogleAuth(scopes, callback) {
     callback: (resp) => {
       if (resp.access_token) {
         STATE.googleAccessToken = resp.access_token;
+        // Cache the token for this browser session so page reloads reuse it
+        // instead of re-prompting every refresh. Cleared on tab close + on 401/403.
+        try {
+          sessionStorage.setItem('rih_gtoken', JSON.stringify({
+            token: resp.access_token,
+            scopes: scopes.join(' '),
+            expiresAt: Date.now() + ((parseInt(resp.expires_in) || 3600) * 1000)
+          }));
+        } catch (e) {}
         updateDots();
         if (callback) callback();
       } else {
@@ -3397,6 +3415,17 @@ function requestGoogleAuth(scopes, callback) {
       }
     }
   }).requestAccessToken();
+}
+
+// Restore a still-valid cached token (called at init, before any auto-load)
+function restoreGoogleToken() {
+  try {
+    const t = JSON.parse(sessionStorage.getItem('rih_gtoken') || 'null');
+    // Require the write scope and >1 min of remaining life
+    if (t && t.token && /\/auth\/spreadsheets(?!\.)/.test(t.scopes || '') && t.expiresAt > Date.now() + 60000) {
+      STATE.googleAccessToken = t.token;
+    }
+  } catch (e) {}
 }
 
 // ════════════════════════════════════════════════════════
@@ -3421,7 +3450,7 @@ async function loadFromSheet(opts = {}) {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + STATE.googleAccessToken } });
     if (res.status === 401 || res.status === 403) {
       // Token expired or insufficient scope — drop it and re-auth once
-      STATE.googleAccessToken = null;
+      STATE.googleAccessToken = null; try { sessionStorage.removeItem("rih_gtoken"); } catch (e) {}
       toast('⚠️ Sheets access denied — re-authorizing…', true);
       requestGoogleAuth(['https://www.googleapis.com/auth/spreadsheets'], () => loadFromSheet(opts));
       return;
@@ -3571,6 +3600,7 @@ function whenGoogleReady(cb, tries = 0) {
   if (tries > 40) return;  // ~10s; give up silently — user can click Load from Sheet
   setTimeout(() => whenGoogleReady(cb, tries + 1), 250);
 }
+restoreGoogleToken();   // reuse this session's token so reloads don't re-prompt
 if (STATE.settings.sheetId) {
   whenGoogleReady(() => loadFromSheet({ auto: true }));
 }
