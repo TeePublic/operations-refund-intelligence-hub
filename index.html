@@ -1348,6 +1348,7 @@ function parseMakegoodCSV(text) {
   if (!rows.length) { toast('No rows with voucher or reprint values found.', true); return; }
   STATE.makegoodData = rows;
   if (!STATE.usdToAudRate) fetchExchangeRate();
+  saveSnapshot();   // include makegoods in the local launch cache
   toast(`✓ ${rows.length.toLocaleString()} makegood rows loaded (RBO)`);
   renderOverview();
 }
@@ -1645,6 +1646,56 @@ async function ingestDriveFileById(id, mimeType, name) {
   } catch (e) { toast('⚠️ Drive ingest failed: ' + e.message, true); }
 }
 
+// ════════════════════════════════════════════════════════
+// LOCAL CACHE (IndexedDB) — instant data on launch
+// Persists the loaded dataset in the browser so the app shows data immediately
+// on every launch, then refreshes from the Sheet in the background. Lets the
+// large dataset survive refreshes without a slow re-pull or a sign-in prompt.
+// ════════════════════════════════════════════════════════
+const IDB_NAME = 'rih', IDB_STORE = 'cache', IDB_KEY = 'snapshot';
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbSet(val) {
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(val, IDB_KEY);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+    db.close();
+  } catch (e) { /* cache is best-effort */ }
+}
+async function idbGet() {
+  try {
+    const db = await idbOpen();
+    const v = await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const rq = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+    });
+    db.close();
+    return v;
+  } catch (e) { return null; }
+}
+// Save the current dataset (fire-and-forget) so the next launch is instant
+function saveSnapshot() {
+  if (!STATE.refunds.length) return;
+  idbSet({
+    refunds: STATE.refunds,
+    makegoodData: STATE.makegoodData,
+    sources: STATE.sources,
+    usdToAudRate: STATE.usdToAudRate,
+    savedAt: Date.now()
+  });
+}
+
 // opts.publish === true → also append these rows to the shared Sheet (uploads only;
 // never for sample data or rows that were just READ from the Sheet).
 function loadData(refunds, statusMsg, opts = {}) {
@@ -1672,6 +1723,8 @@ function loadData(refunds, statusMsg, opts = {}) {
   updateDots();
   toast(`✓ ${statusMsg}`);
   if (!STATE.usdToAudRate) fetchExchangeRate();
+
+  saveSnapshot();   // cache locally so the next launch shows data instantly
 
   // Shared persistence: auto-publish uploaded rows to the Sheet so coworkers see them
   if (opts.publish) publishRefundsToSheet(refunds);
@@ -3601,9 +3654,35 @@ function whenGoogleReady(cb, tries = 0) {
   setTimeout(() => whenGoogleReady(cb, tries + 1), 250);
 }
 restoreGoogleToken();   // reuse this session's token so reloads don't re-prompt
-if (STATE.settings.sheetId) {
-  whenGoogleReady(() => loadFromSheet({ auto: true }));
-}
+
+// Launch sequence: show cached data instantly, then refresh from the Sheet.
+(async function launch() {
+  // 1. Render the last-known dataset from the local cache immediately (no prompt)
+  let hadCache = false;
+  const snap = await idbGet();
+  if (snap && snap.refunds && snap.refunds.length) {
+    hadCache = true;
+    STATE.refunds = snap.refunds;
+    STATE.makegoodData = snap.makegoodData || [];
+    if (snap.sources && snap.sources.length) STATE.sources = snap.sources;
+    if (snap.usdToAudRate) STATE.usdToAudRate = snap.usdToAudRate;
+    document.getElementById('uploadSection').style.display = 'none';
+    populateTagFilter();
+    setDefaultDates();
+    renderOverview();
+    updateDots();
+    const when = snap.savedAt ? new Date(snap.savedAt).toLocaleString() : '';
+    document.getElementById('dataStatus').textContent =
+      `${STATE.refunds.length.toLocaleString()} refunds (cached${when ? ' · ' + when : ''})`;
+  }
+
+  // 2. Refresh from the Sheet. If we already have cached data, only refresh
+  //    silently when a token is on hand (don't pop a sign-in over good data).
+  //    First-time users (no cache) get the normal auto-load.
+  if (STATE.settings.sheetId && (STATE.googleAccessToken || !hadCache)) {
+    whenGoogleReady(() => loadFromSheet({ auto: true }));
+  }
+})();
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
